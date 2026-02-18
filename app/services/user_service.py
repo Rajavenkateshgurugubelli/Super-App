@@ -2,6 +2,9 @@ import logging
 import uuid
 from app import user_pb2
 from app import user_pb2_grpc
+from app.database import SessionLocal
+from app.models import User
+from app import models
 
 class UserService(user_pb2_grpc.UserServiceServicer):
     def __init__(self):
@@ -9,34 +12,69 @@ class UserService(user_pb2_grpc.UserServiceServicer):
 
     def CreateUser(self, request, context):
         self._logger.info(f"Creating user for email: {request.email}")
-        user_id = str(uuid.uuid4())
-        return user_pb2.CreateUserResponse(
-            user=user_pb2.User(
-                user_id=user_id,
+        session = SessionLocal()
+        try:
+            # Check if user exists
+            existing_user = session.query(User).filter(User.email == request.email).first()
+            if existing_user:
+                return user_pb2.CreateUserResponse(
+                    user=self._map_user_to_proto(existing_user)
+                )
+
+            new_user = User(
                 email=request.email,
                 name=request.name,
-                region=request.region,
-                kyc_status=user_pb2.KYC_STATUS_PENDING
+                region=models.Region(request.region),
+                kyc_status=models.KycStatus.PENDING
             )
-        )
+            session.add(new_user)
+            session.commit()
+            session.refresh(new_user)
+            
+            return user_pb2.CreateUserResponse(
+                user=self._map_user_to_proto(new_user)
+            )
+        except Exception as e:
+            self._logger.error(f"Error creating user: {e}")
+            session.rollback()
+            raise
+        finally:
+            session.close()
 
     def GetUser(self, request, context):
         self._logger.info(f"Getting user: {request.user_id}")
-        return user_pb2.GetUserResponse(
-            user=user_pb2.User(
-                user_id=request.user_id,
-                email="mock@example.com",
-                name="Mock User",
-                region=user_pb2.REGION_US,
-                kyc_status=user_pb2.KYC_STATUS_VERIFIED
+        session = SessionLocal()
+        try:
+            user = session.query(User).filter(User.user_id == request.user_id).first()
+            if not user:
+                 # return empty or raise error (for now empty default)
+                 return user_pb2.GetUserResponse()
+            
+            return user_pb2.GetUserResponse(
+                user=self._map_user_to_proto(user)
             )
-        )
+        finally:
+            session.close()
 
     def UpdateProfile(self, request, context):
         self._logger.info(f"Updating profile for: {request.user_id}")
-        return user_pb2.UpdateProfileResponse(
-            user=user_pb2.User(
-                user_id=request.user_id,
-                name=request.name
-            )
+        session = SessionLocal()
+        try:
+            user = session.query(User).filter(User.user_id == request.user_id).first()
+            if user:
+                user.name = request.name
+                session.commit()
+                session.refresh(user)
+                return user_pb2.UpdateProfileResponse(user=self._map_user_to_proto(user))
+            return user_pb2.UpdateProfileResponse()
+        finally:
+            session.close()
+
+    def _map_user_to_proto(self, user_model):
+        return user_pb2.User(
+            user_id=user_model.user_id,
+            email=user_model.email,
+            name=user_model.name,
+            region=user_model.region.value,
+            kyc_status=user_model.kyc_status.value
         )
