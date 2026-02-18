@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+package user;
+
+option java_multiple_files = true;
+option java_package = "com.antigravity.superapp.proto.user";
+
+service UserService {
+  rpc CreateUser (CreateUserRequest) returns (CreateUserResponse);
+  rpc GetUser (GetUserRequest) returns (GetUserResponse);
+  rpc UpdateProfile (UpdateProfileRequest) returns (UpdateProfileResponse);
+}
+
+message User {
+  string user_id = 1;
+  string email = 2;
+  string name = 3;
+  Region region = 4;
+  KycStatus kyc_status = 5;
+}
+
+enum Region {
+  REGION_UNSPECIFIED = 0;
+  REGION_INDIA = 1;
+  REGION_EU = 2;
+  REGION_US = 3;
+}
+
+enum KycStatus {
+  KYC_STATUS_UNSPECIFIED = 0;
+  KYC_STATUS_PENDING = 1;
+  KYC_STATUS_VERIFIED = 2;
+  KYC_STATUS_FAILED = 3;
+}
+
+message CreateUserRequest {
+  string email = 1;
+  string name = 2;
+  Region region = 3;
+}
+
+message CreateUserResponse {
+  User user = 1;
+}
+
+message GetUserRequest {
+  string user_id = 1;
+}
+
+message GetUserResponse {
+  User user = 1;
+}
+
+message UpdateProfileRequest {
+  string user_id = 1;
+  string name = 2;
+}
+
+message UpdateProfileResponse {
+  User user = 1;
+}

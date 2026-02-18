@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package wallet;
+
+option java_multiple_files = true;
+option java_package = "com.antigravity.superapp.proto.wallet";
+
+service WalletService {
+  rpc CreateWallet (CreateWalletRequest) returns (CreateWalletResponse);
+  rpc GetBalance (GetBalanceRequest) returns (GetBalanceResponse);
+  rpc TransferFunds (TransferFundsRequest) returns (TransferFundsResponse);
+}
+
+message Wallet {
+  string wallet_id = 1;
+  string user_id = 2;
+  Currency currency = 3;
+  double balance = 4;
+}
+
+enum Currency {
+  CURRENCY_UNSPECIFIED = 0;
+  CURRENCY_USD = 1;
+  CURRENCY_INR = 2;
+  CURRENCY_EUR = 3;
+}
+
+message CreateWalletRequest {
+  string user_id = 1;
+  Currency currency = 2;
+}
+
+message CreateWalletResponse {
+  Wallet wallet = 1;
+}
+
+message GetBalanceRequest {
+  string wallet_id = 1;
+}
+
+message GetBalanceResponse {
+  Wallet wallet = 1;
+}
+
+message TransferFundsRequest {
+  string from_wallet_id = 1;
+  string to_wallet_id = 2;
+  double amount = 3;
+}
+
+message TransferFundsResponse {
+  bool success = 1;
+  string transaction_id = 2;
+  string message = 3;
+}

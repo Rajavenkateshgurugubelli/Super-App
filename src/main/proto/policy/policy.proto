@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package policy;
+
+option java_multiple_files = true;
+option java_package = "com.antigravity.superapp.proto.policy";
+
+service PolicyService {
+  rpc CheckCompliance (CheckComplianceRequest) returns (CheckComplianceResponse);
+  rpc GetRegionPolicy (GetRegionPolicyRequest) returns (GetRegionPolicyResponse);
+}
+
+message Policy {
+  string policy_id = 1;
+  string region = 2;
+  map<string, string> rules = 3;
+}
+
+message CheckComplianceRequest {
+  string user_id = 1;
+  string action = 2; // e.g., "transfer_funds", "login"
+  string target_region = 3; 
+}
+
+message CheckComplianceResponse {
+  bool allowed = 1;
+  string reason = 2;
+}
+
+message GetRegionPolicyRequest {
+  string region = 1;
+}
+
+message GetRegionPolicyResponse {
+  Policy policy = 1;
+}
