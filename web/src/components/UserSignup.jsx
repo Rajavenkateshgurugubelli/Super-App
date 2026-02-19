@@ -4,6 +4,7 @@ const UserSignup = ({ onUserCreated }) => {
     const [formData, setFormData] = useState({
         name: '',
         email: '',
+        password: '',
         region: 1
     });
     const [loading, setLoading] = useState(false);
@@ -26,6 +27,9 @@ const UserSignup = ({ onUserCreated }) => {
                 throw new Error('Failed to create user');
             }
 
+            // Auto-login after signup would be nice, but for now just callback
+            // Ideally backend returns token on signup or we ask user to login
+            // Let's assume we redirect to login
             const data = await response.json();
             onUserCreated(data);
         } catch (err) {
@@ -60,6 +64,17 @@ const UserSignup = ({ onUserCreated }) => {
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                         required
                         placeholder="john@example.com"
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-700">Password</label>
+                    <input
+                        type="password"
+                        className="mt-1 block w-full rounded-md border border-gray-300 p-2 focus:ring-blue-500 focus:border-blue-500"
+                        value={formData.password}
+                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                        required
+                        placeholder="********"
                     />
                 </div>
                 <div>

@@ -1,12 +1,31 @@
 version: '3.8'
 
 services:
-  superapp:
+  backend:
     build: .
     ports:
       - "50051:50051"
     environment:
       - DATABASE_URL=sqlite:///./superapp.db
       - ENCRYPTION_KEY=ChangeMeInProduction123456789012==
+      - SECRET_KEY=supersecretkey
     volumes:
       - ./superapp.db:/app/superapp.db
+
+  gateway:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - GRPC_HOST=backend:50051
+      - SECRET_KEY=supersecretkey
+    command: ["python", "gateway/main.py"]
+    depends_on:
+      - backend
+
+  frontend:
+    build: ./web
+    ports:
+      - "5173:80" # Map host 5173 (standard vite port) to container 80 (nginx)
+    depends_on:
+      - gateway

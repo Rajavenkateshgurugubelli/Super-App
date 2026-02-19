@@ -1,10 +1,11 @@
 import logging
 import uuid
-from app import user_pb2
-from app import user_pb2_grpc
+import grpc
+from app import user_pb2, user_pb2_grpc
 from app.database import SessionLocal
 from app.models import User
 from app import models
+from app.security import get_password_hash, verify_password, create_access_token
 
 class UserService(user_pb2_grpc.UserServiceServicer):
     def __init__(self):
@@ -21,11 +22,14 @@ class UserService(user_pb2_grpc.UserServiceServicer):
                     user=self._map_user_to_proto(existing_user)
                 )
 
+            hashed_password = get_password_hash(request.password) if request.password else None
+
             new_user = User(
                 email=request.email,
                 name=request.name,
                 region=models.Region(request.region),
-                kyc_status=models.KycStatus.PENDING
+                kyc_status=models.KycStatus.PENDING,
+                password_hash=hashed_password
             )
             session.add(new_user)
             session.commit()
@@ -38,6 +42,27 @@ class UserService(user_pb2_grpc.UserServiceServicer):
             self._logger.error(f"Error creating user: {e}")
             session.rollback()
             raise
+        finally:
+            session.close()
+
+    def Login(self, request, context):
+        self._logger.info(f"Login attempt for: {request.email}")
+        session = SessionLocal()
+        try:
+            user = session.query(User).filter(User.email == request.email).first()
+            if not user or not user.password_hash or not verify_password(request.password, user.password_hash):
+                # Return empty token/user on failure (gRPC doesn't have 401, typically use context.abort)
+                # For simplicity in this demo, return success=False logic or catch in gateway
+                 context.set_code(grpc.StatusCode.UNAUTHENTICATED)
+                 context.set_details('Invalid credentials')
+                 return user_pb2.LoginResponse()
+
+            token = create_access_token({"sub": user.email, "user_id": user.user_id})
+            
+            return user_pb2.LoginResponse(
+                token=token,
+                user=self._map_user_to_proto(user)
+            )
         finally:
             session.close()
 

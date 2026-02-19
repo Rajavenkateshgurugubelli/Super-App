@@ -30,6 +30,7 @@ class User(Base):
 
     user_id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
     email = Column(String, unique=True, index=True)
+    password_hash = Column(String, nullable=True) # Nullable for existing users migration
     name = Column(String)
     region = Column(SAEnum(Region), default=Region.UNSPECIFIED)
     kyc_status = Column(SAEnum(KycStatus), default=KycStatus.PENDING)

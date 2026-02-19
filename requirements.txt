@@ -7,3 +7,5 @@ alembic
 fastapi
 uvicorn
 python-multipart
+passlib[bcrypt]
+pyjwt
