@@ -67,6 +67,17 @@ const UserSignup = ({ onUserCreated }) => {
                     />
                 </div>
                 <div>
+                    <label className="block text-sm font-medium text-gray-700">Phone Number</label>
+                    <input
+                        type="tel"
+                        className="mt-1 block w-full rounded-md border border-gray-300 p-2 focus:ring-blue-500 focus:border-blue-500"
+                        value={formData.phone_number || ''}
+                        onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
+                        required
+                        placeholder="+1234567890"
+                    />
+                </div>
+                <div>
                     <label className="block text-sm font-medium text-gray-700">Password</label>
                     <input
                         type="password"

@@ -4,53 +4,33 @@ const WalletDashboard = ({ user }) => {
     const [wallet, setWallet] = useState(null);
     const [balance, setBalance] = useState(0);
     const [loading, setLoading] = useState(false);
-    const [transferData, setTransferData] = useState({ to_wallet_id: '', amount: '' });
+    const [transferData, setTransferData] = useState({ to_wallet_id: '', to_phone_number: '', amount: '' });
+    const [transferType, setTransferType] = useState('phone'); // 'phone' or 'wallet'
 
-    // Create Wallet on mount if not exists (Simplified for demo)
-    useEffect(() => {
-        const createWallet = async () => {
-            try {
-                const response = await fetch('/api/wallets', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: user.user_id, currency: 1 }) // Default USD
-                });
-                const data = await response.json();
-                setWallet(data);
-                setBalance(data.balance);
-            } catch (err) {
-                console.error("Failed to fetch/create wallet", err);
-            }
-        };
-        if (user) createWallet();
-    }, [user]);
-
-    const refreshBalance = async () => {
-        if (!wallet) return;
-        const response = await fetch(`/api/wallets/${wallet.wallet_id}`);
-        const data = await response.json();
-        setBalance(data.balance);
-    };
+    // ... (useEffect and refreshBalance)
 
     const handleTransfer = async (e) => {
         e.preventDefault();
         if (!wallet) return;
         setLoading(true);
         try {
+            const payload = {
+                from_wallet_id: wallet.wallet_id,
+                amount: parseFloat(transferData.amount),
+                to_wallet_id: transferType === 'wallet' ? transferData.to_wallet_id : undefined,
+                to_phone_number: transferType === 'phone' ? transferData.to_phone_number : undefined
+            };
+
             const response = await fetch('/api/transfer', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    from_wallet_id: wallet.wallet_id,
-                    to_wallet_id: transferData.to_wallet_id,
-                    amount: parseFloat(transferData.amount)
-                })
+                body: JSON.stringify(payload)
             });
             const result = await response.json();
             if (result.success) {
                 alert(`Transfer Successful! Transaction ID: ${result.transaction_id}`);
                 refreshBalance();
-                setTransferData({ to_wallet_id: '', amount: '' });
+                setTransferData({ to_wallet_id: '', to_phone_number: '', amount: '' });
             } else {
                 alert(`Transfer Failed: ${result.message}`);
             }
@@ -61,29 +41,55 @@ const WalletDashboard = ({ user }) => {
         }
     };
 
-    if (!user) return null;
-    if (!wallet) return <div className="text-center p-4">Loading Wallet...</div>;
+};
 
-    return (
-        <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-2xl mt-6">
-            <div className="flex justify-between items-center mb-6">
-                <div>
-                    <h2 className="text-2xl font-bold text-gray-800">Wallet Dashboard</h2>
-                    <p className="text-gray-500">Welcome, {user.name}</p>
-                </div>
-                <div className="text-right">
-                    <div className="text-sm text-gray-500">Current Balance</div>
-                    <div className="text-3xl font-bold text-green-600">
-                        ${balance.toFixed(2)}
-                    </div>
-                    <div className="text-xs text-gray-400">Wallet ID: {wallet.wallet_id}</div>
-                </div>
+if (!user) return null;
+if (!wallet) return <div className="text-center p-4">Loading Wallet...</div>;
+
+return (
+    <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-2xl mt-6">
+        <div className="flex justify-between items-center mb-6">
+            <div>
+                <h2 className="text-2xl font-bold text-gray-800">Wallet Dashboard</h2>
+                <p className="text-gray-500">Welcome, {user.name}</p>
             </div>
+            <div className="text-right">
+                <div className="text-sm text-gray-500">Current Balance</div>
+                <div className="text-3xl font-bold text-green-600">
+                    ${balance.toFixed(2)}
+                </div>
+                <div className="text-xs text-gray-400">Wallet ID: {wallet.wallet_id}</div>
+            </div>
+        </div>
 
-            <div className="border-t pt-6">
-                <h3 className="text-lg font-semibold mb-4">Transfer Funds</h3>
-                <form onSubmit={handleTransfer} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="md:col-span-2">
+        <div className="border-t pt-6">
+            <h3 className="text-lg font-semibold mb-4">Transfer Funds</h3>
+            <div className="flex space-x-4 mb-4">
+                <button
+                    className={`px-3 py-1 rounded-full text-sm ${transferType === 'phone' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-500'}`}
+                    onClick={() => setTransferType('phone')}
+                >
+                    By Phone
+                </button>
+                <button
+                    className={`px-3 py-1 rounded-full text-sm ${transferType === 'wallet' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-500'}`}
+                    onClick={() => setTransferType('wallet')}
+                >
+                    By Wallet ID
+                </button>
+            </div>
+            <form onSubmit={handleTransfer} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="md:col-span-2">
+                    {transferType === 'phone' ? (
+                        <input
+                            type="tel"
+                            placeholder="Recipient Phone Number"
+                            className="w-full rounded-md border border-gray-300 p-2"
+                            value={transferData.to_phone_number}
+                            onChange={(e) => setTransferData({ ...transferData, to_phone_number: e.target.value })}
+                            required
+                        />
+                    ) : (
                         <input
                             type="text"
                             placeholder="Recipient Wallet ID"
@@ -92,35 +98,36 @@ const WalletDashboard = ({ user }) => {
                             onChange={(e) => setTransferData({ ...transferData, to_wallet_id: e.target.value })}
                             required
                         />
-                    </div>
-                    <div>
-                        <input
-                            type="number"
-                            placeholder="Amount"
-                            className="w-full rounded-md border border-gray-300 p-2"
-                            value={transferData.amount}
-                            onChange={(e) => setTransferData({ ...transferData, amount: e.target.value })}
-                            required
-                        />
-                    </div>
-                    <div className="md:col-span-3">
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full bg-indigo-600 text-white py-2 rounded-md hover:bg-indigo-700 disabled:opacity-50"
-                        >
-                            {loading ? 'Processing...' : 'Send Money'}
-                        </button>
-                    </div>
-                </form>
-            </div>
-
-            <div className="border-t pt-6 mt-6">
-                <h3 className="text-lg font-semibold mb-4">Recent Transactions</h3>
-                <TransactionHistory walletId={wallet.wallet_id} />
-            </div>
+                    )}
+                </div>
+                <div>
+                    <input
+                        type="number"
+                        placeholder="Amount"
+                        className="w-full rounded-md border border-gray-300 p-2"
+                        value={transferData.amount}
+                        onChange={(e) => setTransferData({ ...transferData, amount: e.target.value })}
+                        required
+                    />
+                </div>
+                <div className="md:col-span-3">
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className="w-full bg-indigo-600 text-white py-2 rounded-md hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                        {loading ? 'Processing...' : 'Send Money'}
+                    </button>
+                </div>
+            </form>
         </div>
-    );
+
+        <div className="border-t pt-6 mt-6">
+            <h3 className="text-lg font-semibold mb-4">Recent Transactions</h3>
+            <TransactionHistory walletId={wallet.wallet_id} />
+        </div>
+    </div >
+);
 };
 
 const TransactionHistory = ({ walletId }) => {

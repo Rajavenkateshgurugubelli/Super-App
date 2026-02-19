@@ -51,6 +51,7 @@ class User(Base):
     name = Column(String)
     region = Column(SAEnum(Region), default=Region.UNSPECIFIED)
     kyc_status = Column(SAEnum(KycStatus), default=KycStatus.PENDING)
+    phone_number = Column(String, unique=True, index=True)
     # Encrypted PII field (e.g. government ID)
     encrypted_pii = Column(String, nullable=True)
 
@@ -80,3 +81,16 @@ class Transaction(Base):
 
     source_wallet = relationship("Wallet", foreign_keys=[from_wallet_id], back_populates="outgoing_transactions")
     destination_wallet = relationship("Wallet", foreign_keys=[to_wallet_id], back_populates="incoming_transactions")
+    conversion = relationship("ConversionRate", uselist=False, back_populates="transaction")
+
+class ConversionRate(Base):
+    __tablename__ = "conversion_rates"
+    
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    transaction_id = Column(String, ForeignKey("transactions.transaction_id"))
+    from_currency = Column(String)
+    to_currency = Column(String)
+    rate = Column(Float)
+    timestamp = Column(Float)
+    
+    transaction = relationship("Transaction", back_populates="conversion")

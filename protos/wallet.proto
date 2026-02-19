@@ -7,6 +7,7 @@ service WalletService {
   rpc GetBalance (GetBalanceRequest) returns (GetBalanceResponse);
   rpc TransferFunds (TransferFundsRequest) returns (TransferFundsResponse);
   rpc GetTransactionHistory (GetTransactionHistoryRequest) returns (GetTransactionHistoryResponse);
+  rpc GetConversionHistory (GetConversionHistoryRequest) returns (GetConversionHistoryResponse);
 }
 
 message Wallet {
@@ -44,6 +45,7 @@ message TransferFundsRequest {
   string from_wallet_id = 1;
   string to_wallet_id = 2;
   double amount = 3;
+  string to_phone_number = 4;
 }
 
 message TransferFundsResponse {
@@ -60,11 +62,32 @@ message TransactionInfo {
   string transaction_id = 1;
   string from_wallet_id = 2;
   string to_wallet_id = 3;
-  double amount = 4; // Amount debited (if viewer is sender) or credited (if viewer is receiver) - Simplified to just stored amount for now
+  double amount = 4;
   string status = 5;
   double timestamp = 6;
+  string from_currency = 7;
+  string to_currency = 8;
+  double exchange_rate = 9;
 }
 
 message GetTransactionHistoryResponse {
   repeated TransactionInfo transactions = 1;
+}
+
+message GetConversionHistoryRequest {
+  string wallet_id = 1;
+}
+
+message ConversionRecord {
+  string transaction_id = 1;
+  string from_currency = 2;
+  string to_currency = 3;
+  double rate = 4;
+  double amount_original = 5;
+  double amount_converted = 6;
+  double timestamp = 7;
+}
+
+message GetConversionHistoryResponse {
+  repeated ConversionRecord records = 1;
 }

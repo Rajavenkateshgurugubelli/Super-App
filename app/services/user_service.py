@@ -31,7 +31,8 @@ class UserService(user_pb2_grpc.UserServiceServicer):
                 name=request.name,
                 region=models.Region(request.region), # Cast int to Enum
                 password_hash=hashed_password,
-                kyc_status=models.KycStatus.PENDING 
+                kyc_status=models.KycStatus.PENDING, 
+                phone_number=request.phone_number
             )
             
             session.add(new_user)

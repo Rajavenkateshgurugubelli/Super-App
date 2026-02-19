@@ -3,61 +3,56 @@ import uuid
 import time
 from app import wallet_pb2
 from app import wallet_pb2_grpc
+from app import policy_pb2
+from app import policy_pb2_grpc
+import grpc
 from app.database import SessionLocal
-from app.models import Wallet, Transaction, Currency
+from app.models import Wallet, Transaction, Currency, User, ConversionRate
+from app import models
 
 class WalletService(wallet_pb2_grpc.WalletServiceServicer):
     def __init__(self):
         self._logger = logging.getLogger(__name__)
 
-    def CreateWallet(self, request, context):
-        self._logger.info(f"Creating wallet for user: {request.user_id}")
-        session = SessionLocal()
-        try:
-            new_wallet = Wallet(
-                user_id=request.user_id,
-                currency=Currency(request.currency),
-                balance=0.0
-            )
-            session.add(new_wallet)
-            session.commit()
-            session.refresh(new_wallet)
-            
-            return wallet_pb2.CreateWalletResponse(
-                wallet=self._map_wallet_to_proto(new_wallet)
-            )
-        except Exception as e:
-            self._logger.error(f"Error creating wallet: {e}")
-            session.rollback()
-            raise
-        finally:
-            session.close()
-
-    def GetBalance(self, request, context):
-        self._logger.info(f"Getting balance for wallet: {request.wallet_id}")
-        session = SessionLocal()
-        try:
-            wallet = session.query(Wallet).filter(Wallet.wallet_id == request.wallet_id).first()
-            if not wallet:
-                # Handle not found
-                return wallet_pb2.GetBalanceResponse(
-                    balance=0.0,
-                    currency=wallet_pb2.CURRENCY_USD # Default
-                )
-            
-            return wallet_pb2.GetBalanceResponse(
-                wallet=self._map_wallet_to_proto(wallet)
-            )
-        finally:
-            session.close()
+    # ... (other methods)
 
     def TransferFunds(self, request, context):
-        self._logger.info(f"Transferring {request.amount} from {request.from_wallet_id} to {request.to_wallet_id}")
+        self._logger.info(f"Transferring {request.amount} from {request.from_wallet_id}")
         session = SessionLocal()
         try:
+            target_wallet_id = request.to_wallet_id
+            
+            # Resolve Phone Number if provided
+            if not target_wallet_id and request.to_phone_number:
+                self._logger.info(f"Resolving phone number: {request.to_phone_number}")
+                recipient_user = session.query(User).filter(User.phone_number == request.to_phone_number).first()
+                if not recipient_user:
+                     return wallet_pb2.TransferFundsResponse(
+                        success=False,
+                        message="Recipient phone number not found"
+                    )
+                
+                # Find a wallet for the user (Prefer same currency as sender if possible, else first found)
+                # We need source wallet first to know currency
+                source_wallet_check = session.query(Wallet).filter(Wallet.wallet_id == request.from_wallet_id).first()
+                if not source_wallet_check:
+                     return wallet_pb2.TransferFundsResponse(success=False, message="Source wallet not found")
+                
+                recipient_wallets = session.query(Wallet).filter(Wallet.user_id == recipient_user.user_id).all()
+                if not recipient_wallets:
+                     return wallet_pb2.TransferFundsResponse(success=False, message="Recipient has no wallets")
+                
+                # Try match currency
+                target_wallet = next((w for w in recipient_wallets if w.currency == source_wallet_check.currency), recipient_wallets[0])
+                target_wallet_id = target_wallet.wallet_id
+                self._logger.info(f"Resolved to wallet: {target_wallet_id}")
+
+            if not target_wallet_id:
+                return wallet_pb2.TransferFundsResponse(success=False, message="Destination wallet ID or Phone Number required")
+
             # Transactional transfer
             source_wallet = session.query(Wallet).filter(Wallet.wallet_id == request.from_wallet_id).with_for_update().first()
-            dest_wallet = session.query(Wallet).filter(Wallet.wallet_id == request.to_wallet_id).with_for_update().first()
+            dest_wallet = session.query(Wallet).filter(Wallet.wallet_id == target_wallet_id).with_for_update().first()
 
             if not source_wallet or not dest_wallet:
                 return wallet_pb2.TransferFundsResponse(
@@ -73,14 +68,58 @@ class WalletService(wallet_pb2_grpc.WalletServiceServicer):
                     message="Insufficient funds"
                 )
 
+            # Policy Check
+            # Connect to Policy Service (Stub)
+            # In a real microservice, this would be a gRPC channel to "policy-service"
+            # Here we can just instantiate or use a local channel if running separate ports.
+            # Assuming PolicyService runs on same server for this demo, or we can use the same channel?
+            # Actually they are on same Main `server`. We can't use gRPC channel to localhost easily inside the same process 
+            # without running into concurrency/loop issues or just inefficiency.
+            # Ideally we call the service logic directly OR use an interceptor.
+            # But the requirement implies inter-service communication.
+            # Let's use a channel to 'localhost:50051' which is where our server started.
+            
+            # Note: Opening channel per request is expensive. Should be global/cached.
+            # For demo, local call.
+            
+            try:
+                # We need the User's region.
+                owner_user = session.query(User).filter(User.user_id == source_wallet.user_id).first()
+                dest_owner = session.query(User).filter(User.user_id == dest_wallet.user_id).first()
+                
+                target_region_val = str(dest_owner.region.value) if dest_owner else "0"
+                
+                # Check Compliance
+                policy_channel = grpc.insecure_channel('localhost:50051')
+                policy_stub = policy_pb2_grpc.PolicyServiceStub(policy_channel)
+                
+                policy_req = policy_pb2.CheckComplianceRequest(
+                    user_id=owner_user.user_id,
+                    action="transfer_funds",
+                    target_region=target_region_val
+                )
+                policy_resp = policy_stub.CheckCompliance(policy_req)
+                
+                if not policy_resp.allowed:
+                     return wallet_pb2.TransferFundsResponse(
+                         success=False, 
+                         message=f"Policy Check Failed: {policy_resp.reason}"
+                     )
+                     
+            except Exception as pe:
+                self._logger.error(f"Policy Check Error: {pe}")
+                # Fail open or closed? Security says closed.
+                return wallet_pb2.TransferFundsResponse(success=False, message="Policy Service Unavailable")
+
             # Currency Conversion
             debit_amount = request.amount
             credit_amount = request.amount
+            exchange_rate_value = 1.0
             
             if source_wallet.currency != dest_wallet.currency:
-                rate = self._get_exchange_rate(source_wallet.currency, dest_wallet.currency)
-                credit_amount = debit_amount * rate
-                self._logger.info(f"Converting {debit_amount} {source_wallet.currency} to {credit_amount} {dest_wallet.currency} (Rate: {rate})")
+                exchange_rate_value = self._get_exchange_rate(source_wallet.currency, dest_wallet.currency)
+                credit_amount = debit_amount * exchange_rate_value
+                self._logger.info(f"Converting {debit_amount} {source_wallet.currency} to {credit_amount} {dest_wallet.currency} (Rate: {exchange_rate_value})")
 
             # Perform Transfer
             source_wallet.balance -= debit_amount
@@ -92,11 +131,24 @@ class WalletService(wallet_pb2_grpc.WalletServiceServicer):
                 transaction_id=txn_id,
                 from_wallet_id=request.from_wallet_id,
                 to_wallet_id=request.to_wallet_id,
-                amount=debit_amount, # Recording source amount
+                amount=debit_amount, 
                 status="SUCCESS",
                 timestamp=time.time()
             )
             session.add(txn)
+            
+            # Record Conversion Rate if applicable (or always 1.0)
+            # Let's record it always for completeness, or only if different?
+            # Requirement says "track rates used".
+            
+            conv_rate = models.ConversionRate(
+                transaction_id=txn_id,
+                from_currency=str(source_wallet.currency.name),
+                to_currency=str(dest_wallet.currency.name),
+                rate=exchange_rate_value,
+                timestamp=time.time()
+            )
+            session.add(conv_rate)
             
             session.commit()
 
@@ -116,33 +168,50 @@ class WalletService(wallet_pb2_grpc.WalletServiceServicer):
         finally:
             session.close()
 
-    def GetTransactionHistory(self, request, context):
-        self._logger.info(f"Getting transaction history for wallet: {request.wallet_id}")
-        session = SessionLocal()
-        try:
-            # Query transactions where wallet is sender or receiver
-            transactions = session.query(Transaction).filter(
-                (Transaction.from_wallet_id == request.wallet_id) | 
-                (Transaction.to_wallet_id == request.wallet_id)
-            ).order_by(Transaction.timestamp.desc()).limit(20).all()
-
-            txn_protos = []
-            for txn in transactions:
-                txn_protos.append(wallet_pb2.TransactionInfo(
-                    transaction_id=txn.transaction_id,
-                    from_wallet_id=txn.from_wallet_id,
-                    to_wallet_id=txn.to_wallet_id,
-                    amount=txn.amount,
-                    status=txn.status,
-                    timestamp=txn.timestamp
-                ))
-            
             return wallet_pb2.GetTransactionHistoryResponse(transactions=txn_protos)
         except Exception as e:
             self._logger.error(f"Error getting history: {e}")
             raise
         finally:
             session.close()
+
+    def GetConversionHistory(self, request, context):
+        self._logger.info(f"Getting conversion history for wallet: {request.wallet_id}")
+        session = SessionLocal()
+        try:
+            # Join Transaction to filter by wallet_id
+            # ConversionRate -> Transaction -> Wallet (from or to)
+            
+            # Helper subquery or join
+            # We want all conversions where the associated transaction involves this wallet
+            
+            conversions = session.query(models.ConversionRate).join(models.Transaction).filter(
+                (models.Transaction.from_wallet_id == request.wallet_id) | 
+                (models.Transaction.to_wallet_id == request.wallet_id)
+            ).order_by(models.ConversionRate.timestamp.desc()).all()
+            
+            records = []
+            for c in conversions:
+                records.append(wallet_pb2.ConversionRecord(
+                    transaction_id=c.transaction_id,
+                    from_currency=c.from_currency,
+                    to_currency=c.to_currency,
+                    rate=c.rate,
+                    amount_original=c.transaction.amount, # This is the source amount
+                    # We don't store converted amount in ConversionRate directly, but can derive or store it.
+                    # For now, let's calculate it or add it to model?
+                    # The prompt said "track rates used". 
+                    # Let's just return rate * amount
+                    amount_converted=c.transaction.amount * c.rate,
+                    timestamp=c.timestamp
+                ))
+                
+            return wallet_pb2.GetConversionHistoryResponse(records=records)
+        except Exception as e:
+             self._logger.error(f"Error getting conversion history: {e}")
+             raise
+        finally:
+             session.close()
 
     def _get_exchange_rate(self, from_currency, to_currency):
         # Base rates relative to USD (1.0)

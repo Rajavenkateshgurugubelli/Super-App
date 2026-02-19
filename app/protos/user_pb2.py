@@ -24,35 +24,35 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11protos/user.proto\x12\x04user\"w\n\x04User\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\r\n\x05\x65mail\x18\x02 \x01(\t\x12\x0c\n\x04name\x18\x03 \x01(\t\x12\x1c\n\x06region\x18\x04 \x01(\x0e\x32\x0c.user.Region\x12#\n\nkyc_status\x18\x05 \x01(\x0e\x32\x0f.user.KycStatus\"`\n\x11\x43reateUserRequest\x12\r\n\x05\x65mail\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x1c\n\x06region\x18\x03 \x01(\x0e\x32\x0c.user.Region\x12\x10\n\x08password\x18\x04 \x01(\t\".\n\x12\x43reateUserResponse\x12\x18\n\x04user\x18\x01 \x01(\x0b\x32\n.user.User\"/\n\x0cLoginRequest\x12\r\n\x05\x65mail\x18\x01 \x01(\t\x12\x10\n\x08password\x18\x02 \x01(\t\"8\n\rLoginResponse\x12\r\n\x05token\x18\x01 \x01(\t\x12\x18\n\x04user\x18\x02 \x01(\x0b\x32\n.user.User\"!\n\x0eGetUserRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\"+\n\x0fGetUserResponse\x12\x18\n\x04user\x18\x01 \x01(\x0b\x32\n.user.User\"5\n\x14UpdateProfileRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\"1\n\x15UpdateProfileResponse\x12\x18\n\x04user\x18\x01 \x01(\x0b\x32\n.user.User*P\n\x06Region\x12\x16\n\x12REGION_UNSPECIFIED\x10\x00\x12\x10\n\x0cREGION_INDIA\x10\x01\x12\r\n\tREGION_EU\x10\x02\x12\r\n\tREGION_US\x10\x03*o\n\tKycStatus\x12\x1a\n\x16KYC_STATUS_UNSPECIFIED\x10\x00\x12\x16\n\x12KYC_STATUS_PENDING\x10\x01\x12\x17\n\x13KYC_STATUS_VERIFIED\x10\x02\x12\x15\n\x11KYC_STATUS_FAILED\x10\x03\x32\x82\x02\n\x0bUserService\x12?\n\nCreateUser\x12\x17.user.CreateUserRequest\x1a\x18.user.CreateUserResponse\x12\x30\n\x05Login\x12\x12.user.LoginRequest\x1a\x13.user.LoginResponse\x12\x36\n\x07GetUser\x12\x14.user.GetUserRequest\x1a\x15.user.GetUserResponse\x12H\n\rUpdateProfile\x12\x1a.user.UpdateProfileRequest\x1a\x1b.user.UpdateProfileResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11protos/user.proto\x12\x04user\"\x8d\x01\n\x04User\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\r\n\x05\x65mail\x18\x02 \x01(\t\x12\x0c\n\x04name\x18\x03 \x01(\t\x12\x1c\n\x06region\x18\x04 \x01(\x0e\x32\x0c.user.Region\x12#\n\nkyc_status\x18\x05 \x01(\x0e\x32\x0f.user.KycStatus\x12\x14\n\x0cphone_number\x18\x06 \x01(\t\"v\n\x11\x43reateUserRequest\x12\r\n\x05\x65mail\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x1c\n\x06region\x18\x03 \x01(\x0e\x32\x0c.user.Region\x12\x10\n\x08password\x18\x04 \x01(\t\x12\x14\n\x0cphone_number\x18\x05 \x01(\t\".\n\x12\x43reateUserResponse\x12\x18\n\x04user\x18\x01 \x01(\x0b\x32\n.user.User\"/\n\x0cLoginRequest\x12\r\n\x05\x65mail\x18\x01 \x01(\t\x12\x10\n\x08password\x18\x02 \x01(\t\"8\n\rLoginResponse\x12\r\n\x05token\x18\x01 \x01(\t\x12\x18\n\x04user\x18\x02 \x01(\x0b\x32\n.user.User\"!\n\x0eGetUserRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\"+\n\x0fGetUserResponse\x12\x18\n\x04user\x18\x01 \x01(\x0b\x32\n.user.User\"5\n\x14UpdateProfileRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\"1\n\x15UpdateProfileResponse\x12\x18\n\x04user\x18\x01 \x01(\x0b\x32\n.user.User*P\n\x06Region\x12\x16\n\x12REGION_UNSPECIFIED\x10\x00\x12\x10\n\x0cREGION_INDIA\x10\x01\x12\r\n\tREGION_EU\x10\x02\x12\r\n\tREGION_US\x10\x03*o\n\tKycStatus\x12\x1a\n\x16KYC_STATUS_UNSPECIFIED\x10\x00\x12\x16\n\x12KYC_STATUS_PENDING\x10\x01\x12\x17\n\x13KYC_STATUS_VERIFIED\x10\x02\x12\x15\n\x11KYC_STATUS_FAILED\x10\x03\x32\x82\x02\n\x0bUserService\x12?\n\nCreateUser\x12\x17.user.CreateUserRequest\x1a\x18.user.CreateUserResponse\x12\x30\n\x05Login\x12\x12.user.LoginRequest\x1a\x13.user.LoginResponse\x12\x36\n\x07GetUser\x12\x14.user.GetUserRequest\x1a\x15.user.GetUserResponse\x12H\n\rUpdateProfile\x12\x1a.user.UpdateProfileRequest\x1a\x1b.user.UpdateProfileResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'protos.user_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_REGION']._serialized_start=587
-  _globals['_REGION']._serialized_end=667
-  _globals['_KYCSTATUS']._serialized_start=669
-  _globals['_KYCSTATUS']._serialized_end=780
-  _globals['_USER']._serialized_start=27
-  _globals['_USER']._serialized_end=146
-  _globals['_CREATEUSERREQUEST']._serialized_start=148
-  _globals['_CREATEUSERREQUEST']._serialized_end=244
-  _globals['_CREATEUSERRESPONSE']._serialized_start=246
-  _globals['_CREATEUSERRESPONSE']._serialized_end=292
-  _globals['_LOGINREQUEST']._serialized_start=294
-  _globals['_LOGINREQUEST']._serialized_end=341
-  _globals['_LOGINRESPONSE']._serialized_start=343
-  _globals['_LOGINRESPONSE']._serialized_end=399
-  _globals['_GETUSERREQUEST']._serialized_start=401
-  _globals['_GETUSERREQUEST']._serialized_end=434
-  _globals['_GETUSERRESPONSE']._serialized_start=436
-  _globals['_GETUSERRESPONSE']._serialized_end=479
-  _globals['_UPDATEPROFILEREQUEST']._serialized_start=481
-  _globals['_UPDATEPROFILEREQUEST']._serialized_end=534
-  _globals['_UPDATEPROFILERESPONSE']._serialized_start=536
-  _globals['_UPDATEPROFILERESPONSE']._serialized_end=585
-  _globals['_USERSERVICE']._serialized_start=783
-  _globals['_USERSERVICE']._serialized_end=1041
+  _globals['_REGION']._serialized_start=632
+  _globals['_REGION']._serialized_end=712
+  _globals['_KYCSTATUS']._serialized_start=714
+  _globals['_KYCSTATUS']._serialized_end=825
+  _globals['_USER']._serialized_start=28
+  _globals['_USER']._serialized_end=169
+  _globals['_CREATEUSERREQUEST']._serialized_start=171
+  _globals['_CREATEUSERREQUEST']._serialized_end=289
+  _globals['_CREATEUSERRESPONSE']._serialized_start=291
+  _globals['_CREATEUSERRESPONSE']._serialized_end=337
+  _globals['_LOGINREQUEST']._serialized_start=339
+  _globals['_LOGINREQUEST']._serialized_end=386
+  _globals['_LOGINRESPONSE']._serialized_start=388
+  _globals['_LOGINRESPONSE']._serialized_end=444
+  _globals['_GETUSERREQUEST']._serialized_start=446
+  _globals['_GETUSERREQUEST']._serialized_end=479
+  _globals['_GETUSERRESPONSE']._serialized_start=481
+  _globals['_GETUSERRESPONSE']._serialized_end=524
+  _globals['_UPDATEPROFILEREQUEST']._serialized_start=526
+  _globals['_UPDATEPROFILEREQUEST']._serialized_end=579
+  _globals['_UPDATEPROFILERESPONSE']._serialized_start=581
+  _globals['_UPDATEPROFILERESPONSE']._serialized_end=630
+  _globals['_USERSERVICE']._serialized_start=828
+  _globals['_USERSERVICE']._serialized_end=1086
 # @@protoc_insertion_point(module_scope)

@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-from app import wallet_pb2 as protos_dot_wallet__pb2
+from app import wallet_pb2 as wallet__pb2
 
 GRPC_GENERATED_VERSION = '1.78.0'
 GRPC_VERSION = grpc.__version__
@@ -18,7 +18,7 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + ' but the generated code in protos/wallet_pb2_grpc.py depends on'
+        + ' but the generated code in wallet_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
@@ -36,23 +36,28 @@ class WalletServiceStub(object):
         """
         self.CreateWallet = channel.unary_unary(
                 '/wallet.WalletService/CreateWallet',
-                request_serializer=protos_dot_wallet__pb2.CreateWalletRequest.SerializeToString,
-                response_deserializer=protos_dot_wallet__pb2.CreateWalletResponse.FromString,
+                request_serializer=wallet__pb2.CreateWalletRequest.SerializeToString,
+                response_deserializer=wallet__pb2.CreateWalletResponse.FromString,
                 _registered_method=True)
         self.GetBalance = channel.unary_unary(
                 '/wallet.WalletService/GetBalance',
-                request_serializer=protos_dot_wallet__pb2.GetBalanceRequest.SerializeToString,
-                response_deserializer=protos_dot_wallet__pb2.GetBalanceResponse.FromString,
+                request_serializer=wallet__pb2.GetBalanceRequest.SerializeToString,
+                response_deserializer=wallet__pb2.GetBalanceResponse.FromString,
                 _registered_method=True)
         self.TransferFunds = channel.unary_unary(
                 '/wallet.WalletService/TransferFunds',
-                request_serializer=protos_dot_wallet__pb2.TransferFundsRequest.SerializeToString,
-                response_deserializer=protos_dot_wallet__pb2.TransferFundsResponse.FromString,
+                request_serializer=wallet__pb2.TransferFundsRequest.SerializeToString,
+                response_deserializer=wallet__pb2.TransferFundsResponse.FromString,
                 _registered_method=True)
         self.GetTransactionHistory = channel.unary_unary(
                 '/wallet.WalletService/GetTransactionHistory',
-                request_serializer=protos_dot_wallet__pb2.GetTransactionHistoryRequest.SerializeToString,
-                response_deserializer=protos_dot_wallet__pb2.GetTransactionHistoryResponse.FromString,
+                request_serializer=wallet__pb2.GetTransactionHistoryRequest.SerializeToString,
+                response_deserializer=wallet__pb2.GetTransactionHistoryResponse.FromString,
+                _registered_method=True)
+        self.GetConversionHistory = channel.unary_unary(
+                '/wallet.WalletService/GetConversionHistory',
+                request_serializer=wallet__pb2.GetConversionHistoryRequest.SerializeToString,
+                response_deserializer=wallet__pb2.GetConversionHistoryResponse.FromString,
                 _registered_method=True)
 
 
@@ -83,28 +88,39 @@ class WalletServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetConversionHistory(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_WalletServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'CreateWallet': grpc.unary_unary_rpc_method_handler(
                     servicer.CreateWallet,
-                    request_deserializer=protos_dot_wallet__pb2.CreateWalletRequest.FromString,
-                    response_serializer=protos_dot_wallet__pb2.CreateWalletResponse.SerializeToString,
+                    request_deserializer=wallet__pb2.CreateWalletRequest.FromString,
+                    response_serializer=wallet__pb2.CreateWalletResponse.SerializeToString,
             ),
             'GetBalance': grpc.unary_unary_rpc_method_handler(
                     servicer.GetBalance,
-                    request_deserializer=protos_dot_wallet__pb2.GetBalanceRequest.FromString,
-                    response_serializer=protos_dot_wallet__pb2.GetBalanceResponse.SerializeToString,
+                    request_deserializer=wallet__pb2.GetBalanceRequest.FromString,
+                    response_serializer=wallet__pb2.GetBalanceResponse.SerializeToString,
             ),
             'TransferFunds': grpc.unary_unary_rpc_method_handler(
                     servicer.TransferFunds,
-                    request_deserializer=protos_dot_wallet__pb2.TransferFundsRequest.FromString,
-                    response_serializer=protos_dot_wallet__pb2.TransferFundsResponse.SerializeToString,
+                    request_deserializer=wallet__pb2.TransferFundsRequest.FromString,
+                    response_serializer=wallet__pb2.TransferFundsResponse.SerializeToString,
             ),
             'GetTransactionHistory': grpc.unary_unary_rpc_method_handler(
                     servicer.GetTransactionHistory,
-                    request_deserializer=protos_dot_wallet__pb2.GetTransactionHistoryRequest.FromString,
-                    response_serializer=protos_dot_wallet__pb2.GetTransactionHistoryResponse.SerializeToString,
+                    request_deserializer=wallet__pb2.GetTransactionHistoryRequest.FromString,
+                    response_serializer=wallet__pb2.GetTransactionHistoryResponse.SerializeToString,
+            ),
+            'GetConversionHistory': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetConversionHistory,
+                    request_deserializer=wallet__pb2.GetConversionHistoryRequest.FromString,
+                    response_serializer=wallet__pb2.GetConversionHistoryResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -132,8 +148,8 @@ class WalletService(object):
             request,
             target,
             '/wallet.WalletService/CreateWallet',
-            protos_dot_wallet__pb2.CreateWalletRequest.SerializeToString,
-            protos_dot_wallet__pb2.CreateWalletResponse.FromString,
+            wallet__pb2.CreateWalletRequest.SerializeToString,
+            wallet__pb2.CreateWalletResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -159,8 +175,8 @@ class WalletService(object):
             request,
             target,
             '/wallet.WalletService/GetBalance',
-            protos_dot_wallet__pb2.GetBalanceRequest.SerializeToString,
-            protos_dot_wallet__pb2.GetBalanceResponse.FromString,
+            wallet__pb2.GetBalanceRequest.SerializeToString,
+            wallet__pb2.GetBalanceResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -186,8 +202,8 @@ class WalletService(object):
             request,
             target,
             '/wallet.WalletService/TransferFunds',
-            protos_dot_wallet__pb2.TransferFundsRequest.SerializeToString,
-            protos_dot_wallet__pb2.TransferFundsResponse.FromString,
+            wallet__pb2.TransferFundsRequest.SerializeToString,
+            wallet__pb2.TransferFundsResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -213,8 +229,35 @@ class WalletService(object):
             request,
             target,
             '/wallet.WalletService/GetTransactionHistory',
-            protos_dot_wallet__pb2.GetTransactionHistoryRequest.SerializeToString,
-            protos_dot_wallet__pb2.GetTransactionHistoryResponse.FromString,
+            wallet__pb2.GetTransactionHistoryRequest.SerializeToString,
+            wallet__pb2.GetTransactionHistoryResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetConversionHistory(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/wallet.WalletService/GetConversionHistory',
+            wallet__pb2.GetConversionHistoryRequest.SerializeToString,
+            wallet__pb2.GetConversionHistoryResponse.FromString,
             options,
             channel_credentials,
             insecure,

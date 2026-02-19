@@ -15,6 +15,7 @@ message User {
   string name = 3;
   Region region = 4;
   KycStatus kyc_status = 5;
+  string phone_number = 6;
 }
 
 enum Region {
@@ -36,6 +37,7 @@ message CreateUserRequest {
   string name = 2;
   Region region = 3;
   string password = 4;
+  string phone_number = 5;
 }
 
 message CreateUserResponse {
