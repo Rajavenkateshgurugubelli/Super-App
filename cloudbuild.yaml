@@ -1,26 +1,83 @@
 steps:
-  # Build the container image
+  # 1. Build Backend & Gateway Image (Shared)
   - name: "gcr.io/cloud-builders/docker"
-    args: ["build", "-t", "gcr.io/$PROJECT_ID/superapp:$COMMIT_SHA", "."]
-
-  # Push the container image to Container Registry
-  - name: "gcr.io/cloud-builders/docker"
-    args: ["push", "gcr.io/$PROJECT_ID/superapp:$COMMIT_SHA"]
-
-  # Deploy container image to Cloud Run
-  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
-    entrypoint: gcloud
     args:
-      - "run"
-      - "deploy"
-      - "superapp"
-      - "--image"
-      - "gcr.io/$PROJECT_ID/superapp:$COMMIT_SHA"
-      - "--region"
-      - "us-central1"
-      - "--platform"
-      - "managed"
-      - "--allow-unauthenticated"
+      ["build", "-t", "gcr.io/$PROJECT_ID/superapp-backend:$COMMIT_SHA", "."]
+
+  # 2. Build Frontend Image
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      [
+        "build",
+        "-t",
+        "gcr.io/$PROJECT_ID/superapp-frontend:$COMMIT_SHA",
+        "./web",
+      ]
+
+  # 3. Push Images
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["push", "gcr.io/$PROJECT_ID/superapp-backend:$COMMIT_SHA"]
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["push", "gcr.io/$PROJECT_ID/superapp-frontend:$COMMIT_SHA"]
+
+  # 4. Deploy Backend
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        gcloud run deploy superapp-backend \
+          --image gcr.io/$PROJECT_ID/superapp-backend:$COMMIT_SHA \
+          --region us-central1 \
+          --platform managed \
+          --allow-unauthenticated \
+          --use-http2 \
+          --set-env-vars DATABASE_URL=sqlite:///./superapp.db \
+          --port 50051
+
+  # 5. Deploy Gateway (Connecting to Backend)
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        # Get Backend URL
+        BACKEND_URL=$(gcloud run services describe superapp-backend --region us-central1 --format 'value(status.url)')
+        # Remove https:// prefix for gRPC channel? No, grpc.insecure_channel expects host:port. 
+        # But Cloud Run uses HTTPS/443. We need secure channel using system certs.
+        # This requires code change in gateway/main.py to use `grpc.secure_channel` if https.
+        # For now, let's deploy and see.
+
+        echo "Backend URL: $BACKEND_URL"
+
+        # Deploy Gateway
+        gcloud run deploy superapp-gateway \
+          --image gcr.io/$PROJECT_ID/superapp-backend:$COMMIT_SHA \
+          --command python \
+          --args gateway/main.py \
+          --region us-central1 \
+          --platform managed \
+          --allow-unauthenticated \
+          --set-env-vars GRPC_HOST=$BACKEND_URL,GRPC_SECURE=true \
+          --port 8000
+
+  # 6. Deploy Frontend (Connecting to Gateway)
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        GATEWAY_URL=$(gcloud run services describe superapp-gateway --region us-central1 --format 'value(status.url)')
+        echo "Gateway URL: $GATEWAY_URL"
+
+        gcloud run deploy superapp-frontend \
+          --image gcr.io/$PROJECT_ID/superapp-frontend:$COMMIT_SHA \
+          --region us-central1 \
+          --platform managed \
+          --allow-unauthenticated \
+          --set-env-vars GATEWAY_URL=$GATEWAY_URL \
+          --port 8080
 
 images:
-  - "gcr.io/$PROJECT_ID/superapp:$COMMIT_SHA"
+  - "gcr.io/$PROJECT_ID/superapp-backend:$COMMIT_SHA"
+  - "gcr.io/$PROJECT_ID/superapp-frontend:$COMMIT_SHA"

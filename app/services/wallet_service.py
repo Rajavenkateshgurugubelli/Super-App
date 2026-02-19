@@ -168,6 +168,27 @@ class WalletService(wallet_pb2_grpc.WalletServiceServicer):
         finally:
             session.close()
 
+    def GetTransactionHistory(self, request, context):
+        self._logger.info(f"Getting transaction history for wallet: {request.wallet_id}")
+        session = SessionLocal()
+        try:
+            # Query transactions where wallet is sender or receiver
+            transactions = session.query(Transaction).filter(
+                (Transaction.from_wallet_id == request.wallet_id) | 
+                (Transaction.to_wallet_id == request.wallet_id)
+            ).order_by(Transaction.timestamp.desc()).limit(20).all()
+
+            txn_protos = []
+            for txn in transactions:
+                txn_protos.append(wallet_pb2.TransactionInfo(
+                    transaction_id=txn.transaction_id,
+                    from_wallet_id=txn.from_wallet_id,
+                    to_wallet_id=txn.to_wallet_id,
+                    amount=txn.amount,
+                    status=txn.status,
+                    timestamp=txn.timestamp
+                ))
+            
             return wallet_pb2.GetTransactionHistoryResponse(transactions=txn_protos)
         except Exception as e:
             self._logger.error(f"Error getting history: {e}")

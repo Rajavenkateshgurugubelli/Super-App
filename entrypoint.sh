@@ -1,10 +1,15 @@
 #!/bin/sh
 set -e
 
-# Run database migrations
-echo "Running database migrations..."
-alembic upgrade head
+# Run database migrations (or create tables if missing)
+echo "Initializing database..."
+python -c "from app.database import Base, engine; from app import models; Base.metadata.create_all(bind=engine)"
 
-# Start the gRPC server
+# If arguments provided, exec them (e.g., gateway, worker)
+if [ "$#" -gt 0 ]; then
+    exec "$@"
+fi
+
+# Start the gRPC server as default command
 echo "Starting gRPC server..."
 exec python -m app.main

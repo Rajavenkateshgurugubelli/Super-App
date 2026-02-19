@@ -1,0 +1,12 @@
+venv
+.git
+.idea
+__pycache__
+*.pyc
+.env
+superapp.db
+test_env
+protoc-29.3-win64
+*.log
+web/node_modules
+web/dist
