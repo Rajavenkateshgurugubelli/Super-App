@@ -4,3 +4,6 @@ cryptography
 pytest
 sqlalchemy
 alembic
+fastapi
+uvicorn
+python-multipart

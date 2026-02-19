@@ -6,6 +6,7 @@ service WalletService {
   rpc CreateWallet (CreateWalletRequest) returns (CreateWalletResponse);
   rpc GetBalance (GetBalanceRequest) returns (GetBalanceResponse);
   rpc TransferFunds (TransferFundsRequest) returns (TransferFundsResponse);
+  rpc GetTransactionHistory (GetTransactionHistoryRequest) returns (GetTransactionHistoryResponse);
 }
 
 message Wallet {
@@ -49,4 +50,21 @@ message TransferFundsResponse {
   bool success = 1;
   string transaction_id = 2;
   string message = 3;
+}
+
+message GetTransactionHistoryRequest {
+  string wallet_id = 1;
+}
+
+message TransactionInfo {
+  string transaction_id = 1;
+  string from_wallet_id = 2;
+  string to_wallet_id = 3;
+  double amount = 4; // Amount debited (if viewer is sender) or credited (if viewer is receiver) - Simplified to just stored amount for now
+  string status = 5;
+  double timestamp = 6;
+}
+
+message GetTransactionHistoryResponse {
+  repeated TransactionInfo transactions = 1;
 }

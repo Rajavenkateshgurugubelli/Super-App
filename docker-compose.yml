@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  superapp:
+    build: .
+    ports:
+      - "50051:50051"
+    environment:
+      - DATABASE_URL=sqlite:///./superapp.db
+      - ENCRYPTION_KEY=ChangeMeInProduction123456789012==
+    volumes:
+      - ./superapp.db:/app/superapp.db
