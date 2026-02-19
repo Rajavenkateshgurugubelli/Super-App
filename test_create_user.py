@@ -1,20 +1,29 @@
-import requests
+import urllib.request
 import json
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 url = "http://localhost:8000/api/users"
 payload = {
-    "email": "test_user_v5@example.com",
-    "name": "Test User",
-    "password": "securepassword123",
+    "email": "test_script_user@example.com",
+    "name": "Script User",
+    "password": "mypassword",
     "region": 1
 }
-headers = {
-    "Content-Type": "application/json"
-}
+
+req = urllib.request.Request(
+    url,
+    data=json.dumps(payload).encode('utf-8'),
+    headers={'Content-Type': 'application/json'},
+    method='POST'
+)
 
 try:
-    response = requests.post(url, json=payload, headers=headers)
-    print(f"Status Code: {response.status_code}")
-    print(f"Response: {response.text}")
+    with urllib.request.urlopen(req) as response:
+        print(f"Status Code: {response.getcode()}")
+        print(f"Response: {response.read().decode('utf-8')}")
+except urllib.error.HTTPError as e:
+    print(f"HTTP Error: {e.code} - {e.read().decode('utf-8')}")
 except Exception as e:
     print(f"Error: {e}")

@@ -12,6 +12,23 @@ class Region(enum.Enum):
     INDIA = 1
     EU = 2
     US = 3
+    
+    # Add a fallback or handling? 
+    # SQLAlchemy Enum stores names by default unless values_callable is specified, 
+    # but the error "'1' is not among the defined enum values" suggests it's trying to convert 
+    # the integer 1 to an Enum member by name, which fails if the Enum is treating 1 as value?
+    
+    # Actually, the error `(builtins.LookupError) '1' is not among the defined enum values`
+    # normally comes from SQLAlchemy trying to map a value back to the python Enum.
+    # But here we are INSERTING. 
+    # The users service is passing `region=request.region` (which is int 1 from proto).
+    # Then `User(..., region=request.region, ...)`
+    # The model defines `region = Column(SAEnum(Region), ...)`
+    # If using SAEnum(Region), it expects a Region enum member, not an integer.
+    # So `request.region` (int 1) is passed, SA tries to validate it against Region enum.
+    # 1 is not a member object. Region(1) would be the member.
+    
+    # So the fix is in user_service.py to cast int to Enum.
 
 class KycStatus(enum.Enum):
     UNSPECIFIED = 0

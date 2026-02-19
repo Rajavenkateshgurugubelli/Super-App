@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-from app import user_pb2 as protos_dot_user__pb2
+from protos import wallet_pb2 as protos_dot_wallet__pb2
 
 GRPC_GENERATED_VERSION = '1.78.0'
 GRPC_VERSION = grpc.__version__
@@ -18,14 +18,14 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + ' but the generated code in protos/user_pb2_grpc.py depends on'
+        + ' but the generated code in protos/wallet_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class UserServiceStub(object):
+class WalletServiceStub(object):
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -34,91 +34,91 @@ class UserServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.CreateUser = channel.unary_unary(
-                '/user.UserService/CreateUser',
-                request_serializer=protos_dot_user__pb2.CreateUserRequest.SerializeToString,
-                response_deserializer=protos_dot_user__pb2.CreateUserResponse.FromString,
+        self.CreateWallet = channel.unary_unary(
+                '/wallet.WalletService/CreateWallet',
+                request_serializer=protos_dot_wallet__pb2.CreateWalletRequest.SerializeToString,
+                response_deserializer=protos_dot_wallet__pb2.CreateWalletResponse.FromString,
                 _registered_method=True)
-        self.Login = channel.unary_unary(
-                '/user.UserService/Login',
-                request_serializer=protos_dot_user__pb2.LoginRequest.SerializeToString,
-                response_deserializer=protos_dot_user__pb2.LoginResponse.FromString,
+        self.GetBalance = channel.unary_unary(
+                '/wallet.WalletService/GetBalance',
+                request_serializer=protos_dot_wallet__pb2.GetBalanceRequest.SerializeToString,
+                response_deserializer=protos_dot_wallet__pb2.GetBalanceResponse.FromString,
                 _registered_method=True)
-        self.GetUser = channel.unary_unary(
-                '/user.UserService/GetUser',
-                request_serializer=protos_dot_user__pb2.GetUserRequest.SerializeToString,
-                response_deserializer=protos_dot_user__pb2.GetUserResponse.FromString,
+        self.TransferFunds = channel.unary_unary(
+                '/wallet.WalletService/TransferFunds',
+                request_serializer=protos_dot_wallet__pb2.TransferFundsRequest.SerializeToString,
+                response_deserializer=protos_dot_wallet__pb2.TransferFundsResponse.FromString,
                 _registered_method=True)
-        self.UpdateProfile = channel.unary_unary(
-                '/user.UserService/UpdateProfile',
-                request_serializer=protos_dot_user__pb2.UpdateProfileRequest.SerializeToString,
-                response_deserializer=protos_dot_user__pb2.UpdateProfileResponse.FromString,
+        self.GetTransactionHistory = channel.unary_unary(
+                '/wallet.WalletService/GetTransactionHistory',
+                request_serializer=protos_dot_wallet__pb2.GetTransactionHistoryRequest.SerializeToString,
+                response_deserializer=protos_dot_wallet__pb2.GetTransactionHistoryResponse.FromString,
                 _registered_method=True)
 
 
-class UserServiceServicer(object):
+class WalletServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
-    def CreateUser(self, request, context):
+    def CreateWallet(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def Login(self, request, context):
+    def GetBalance(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def GetUser(self, request, context):
+    def TransferFunds(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def UpdateProfile(self, request, context):
+    def GetTransactionHistory(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
 
-def add_UserServiceServicer_to_server(servicer, server):
+def add_WalletServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'CreateUser': grpc.unary_unary_rpc_method_handler(
-                    servicer.CreateUser,
-                    request_deserializer=protos_dot_user__pb2.CreateUserRequest.FromString,
-                    response_serializer=protos_dot_user__pb2.CreateUserResponse.SerializeToString,
+            'CreateWallet': grpc.unary_unary_rpc_method_handler(
+                    servicer.CreateWallet,
+                    request_deserializer=protos_dot_wallet__pb2.CreateWalletRequest.FromString,
+                    response_serializer=protos_dot_wallet__pb2.CreateWalletResponse.SerializeToString,
             ),
-            'Login': grpc.unary_unary_rpc_method_handler(
-                    servicer.Login,
-                    request_deserializer=protos_dot_user__pb2.LoginRequest.FromString,
-                    response_serializer=protos_dot_user__pb2.LoginResponse.SerializeToString,
+            'GetBalance': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetBalance,
+                    request_deserializer=protos_dot_wallet__pb2.GetBalanceRequest.FromString,
+                    response_serializer=protos_dot_wallet__pb2.GetBalanceResponse.SerializeToString,
             ),
-            'GetUser': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetUser,
-                    request_deserializer=protos_dot_user__pb2.GetUserRequest.FromString,
-                    response_serializer=protos_dot_user__pb2.GetUserResponse.SerializeToString,
+            'TransferFunds': grpc.unary_unary_rpc_method_handler(
+                    servicer.TransferFunds,
+                    request_deserializer=protos_dot_wallet__pb2.TransferFundsRequest.FromString,
+                    response_serializer=protos_dot_wallet__pb2.TransferFundsResponse.SerializeToString,
             ),
-            'UpdateProfile': grpc.unary_unary_rpc_method_handler(
-                    servicer.UpdateProfile,
-                    request_deserializer=protos_dot_user__pb2.UpdateProfileRequest.FromString,
-                    response_serializer=protos_dot_user__pb2.UpdateProfileResponse.SerializeToString,
+            'GetTransactionHistory': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetTransactionHistory,
+                    request_deserializer=protos_dot_wallet__pb2.GetTransactionHistoryRequest.FromString,
+                    response_serializer=protos_dot_wallet__pb2.GetTransactionHistoryResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'user.UserService', rpc_method_handlers)
+            'wallet.WalletService', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('user.UserService', rpc_method_handlers)
+    server.add_registered_method_handlers('wallet.WalletService', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
-class UserService(object):
+class WalletService(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
-    def CreateUser(request,
+    def CreateWallet(request,
             target,
             options=(),
             channel_credentials=None,
@@ -131,9 +131,9 @@ class UserService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/user.UserService/CreateUser',
-            protos_dot_user__pb2.CreateUserRequest.SerializeToString,
-            protos_dot_user__pb2.CreateUserResponse.FromString,
+            '/wallet.WalletService/CreateWallet',
+            protos_dot_wallet__pb2.CreateWalletRequest.SerializeToString,
+            protos_dot_wallet__pb2.CreateWalletResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -145,7 +145,7 @@ class UserService(object):
             _registered_method=True)
 
     @staticmethod
-    def Login(request,
+    def GetBalance(request,
             target,
             options=(),
             channel_credentials=None,
@@ -158,9 +158,9 @@ class UserService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/user.UserService/Login',
-            protos_dot_user__pb2.LoginRequest.SerializeToString,
-            protos_dot_user__pb2.LoginResponse.FromString,
+            '/wallet.WalletService/GetBalance',
+            protos_dot_wallet__pb2.GetBalanceRequest.SerializeToString,
+            protos_dot_wallet__pb2.GetBalanceResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -172,7 +172,7 @@ class UserService(object):
             _registered_method=True)
 
     @staticmethod
-    def GetUser(request,
+    def TransferFunds(request,
             target,
             options=(),
             channel_credentials=None,
@@ -185,9 +185,9 @@ class UserService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/user.UserService/GetUser',
-            protos_dot_user__pb2.GetUserRequest.SerializeToString,
-            protos_dot_user__pb2.GetUserResponse.FromString,
+            '/wallet.WalletService/TransferFunds',
+            protos_dot_wallet__pb2.TransferFundsRequest.SerializeToString,
+            protos_dot_wallet__pb2.TransferFundsResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -199,7 +199,7 @@ class UserService(object):
             _registered_method=True)
 
     @staticmethod
-    def UpdateProfile(request,
+    def GetTransactionHistory(request,
             target,
             options=(),
             channel_credentials=None,
@@ -212,9 +212,9 @@ class UserService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/user.UserService/UpdateProfile',
-            protos_dot_user__pb2.UpdateProfileRequest.SerializeToString,
-            protos_dot_user__pb2.UpdateProfileResponse.FromString,
+            '/wallet.WalletService/GetTransactionHistory',
+            protos_dot_wallet__pb2.GetTransactionHistoryRequest.SerializeToString,
+            protos_dot_wallet__pb2.GetTransactionHistoryResponse.FromString,
             options,
             channel_credentials,
             insecure,

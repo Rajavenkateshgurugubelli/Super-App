@@ -18,19 +18,22 @@ class UserService(user_pb2_grpc.UserServiceServicer):
             # Check if user exists
             existing_user = session.query(User).filter(User.email == request.email).first()
             if existing_user:
-                return user_pb2.CreateUserResponse(
-                    user=self._map_user_to_proto(existing_user)
-                )
+                context.set_code(grpc.StatusCode.ALREADY_EXISTS)
+                context.set_details('User with this email already exists')
+                return user_pb2.CreateUserResponse()
 
             hashed_password = get_password_hash(request.password) if request.password else None
 
+            # Create User model
             new_user = User(
+                user_id=str(uuid.uuid4()), 
                 email=request.email,
                 name=request.name,
-                region=models.Region(request.region),
-                kyc_status=models.KycStatus.PENDING,
-                password_hash=hashed_password
+                region=models.Region(request.region), # Cast int to Enum
+                password_hash=hashed_password,
+                kyc_status=models.KycStatus.PENDING 
             )
+            
             session.add(new_user)
             session.commit()
             session.refresh(new_user)
