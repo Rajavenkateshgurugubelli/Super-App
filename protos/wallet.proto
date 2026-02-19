@@ -8,6 +8,7 @@ service WalletService {
   rpc TransferFunds (TransferFundsRequest) returns (TransferFundsResponse);
   rpc GetTransactionHistory (GetTransactionHistoryRequest) returns (GetTransactionHistoryResponse);
   rpc GetConversionHistory (GetConversionHistoryRequest) returns (GetConversionHistoryResponse);
+  rpc ListWallets (ListWalletsRequest) returns (ListWalletsResponse);
 }
 
 message Wallet {
@@ -90,4 +91,12 @@ message ConversionRecord {
 
 message GetConversionHistoryResponse {
   repeated ConversionRecord records = 1;
+}
+
+message ListWalletsRequest {
+  string user_id = 1;
+}
+
+message ListWalletsResponse {
+  repeated Wallet wallets = 1;
 }

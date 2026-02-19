@@ -24,15 +24,15 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13protos/wallet.proto\x12\x06wallet\"a\n\x06Wallet\x12\x11\n\twallet_id\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12\"\n\x08\x63urrency\x18\x03 \x01(\x0e\x32\x10.wallet.Currency\x12\x0f\n\x07\x62\x61lance\x18\x04 \x01(\x01\"J\n\x13\x43reateWalletRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\"\n\x08\x63urrency\x18\x02 \x01(\x0e\x32\x10.wallet.Currency\"6\n\x14\x43reateWalletResponse\x12\x1e\n\x06wallet\x18\x01 \x01(\x0b\x32\x0e.wallet.Wallet\"&\n\x11GetBalanceRequest\x12\x11\n\twallet_id\x18\x01 \x01(\t\"4\n\x12GetBalanceResponse\x12\x1e\n\x06wallet\x18\x01 \x01(\x0b\x32\x0e.wallet.Wallet\"m\n\x14TransferFundsRequest\x12\x16\n\x0e\x66rom_wallet_id\x18\x01 \x01(\t\x12\x14\n\x0cto_wallet_id\x18\x02 \x01(\t\x12\x0e\n\x06\x61mount\x18\x03 \x01(\x01\x12\x17\n\x0fto_phone_number\x18\x04 \x01(\t\"Q\n\x15TransferFundsResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x16\n\x0etransaction_id\x18\x02 \x01(\t\x12\x0f\n\x07message\x18\x03 \x01(\t\"1\n\x1cGetTransactionHistoryRequest\x12\x11\n\twallet_id\x18\x01 \x01(\t\"\x8a\x01\n\x0fTransactionInfo\x12\x16\n\x0etransaction_id\x18\x01 \x01(\t\x12\x16\n\x0e\x66rom_wallet_id\x18\x02 \x01(\t\x12\x14\n\x0cto_wallet_id\x18\x03 \x01(\t\x12\x0e\n\x06\x61mount\x18\x04 \x01(\x01\x12\x0e\n\x06status\x18\x05 \x01(\t\x12\x11\n\ttimestamp\x18\x06 \x01(\x01\"N\n\x1dGetTransactionHistoryResponse\x12-\n\x0ctransactions\x18\x01 \x03(\x0b\x32\x17.wallet.TransactionInfo*Z\n\x08\x43urrency\x12\x18\n\x14\x43URRENCY_UNSPECIFIED\x10\x00\x12\x10\n\x0c\x43URRENCY_USD\x10\x01\x12\x10\n\x0c\x43URRENCY_INR\x10\x02\x12\x10\n\x0c\x43URRENCY_EUR\x10\x03\x32\xd3\x02\n\rWalletService\x12I\n\x0c\x43reateWallet\x12\x1b.wallet.CreateWalletRequest\x1a\x1c.wallet.CreateWalletResponse\x12\x43\n\nGetBalance\x12\x19.wallet.GetBalanceRequest\x1a\x1a.wallet.GetBalanceResponse\x12L\n\rTransferFunds\x12\x1c.wallet.TransferFundsRequest\x1a\x1d.wallet.TransferFundsResponse\x12\x64\n\x15GetTransactionHistory\x12$.wallet.GetTransactionHistoryRequest\x1a%.wallet.GetTransactionHistoryResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13protos/wallet.proto\x12\x06wallet\"a\n\x06Wallet\x12\x11\n\twallet_id\x18\x01 \x01(\t\x12\x0f\n\x07user_id\x18\x02 \x01(\t\x12\"\n\x08\x63urrency\x18\x03 \x01(\x0e\x32\x10.wallet.Currency\x12\x0f\n\x07\x62\x61lance\x18\x04 \x01(\x01\"J\n\x13\x43reateWalletRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\"\n\x08\x63urrency\x18\x02 \x01(\x0e\x32\x10.wallet.Currency\"6\n\x14\x43reateWalletResponse\x12\x1e\n\x06wallet\x18\x01 \x01(\x0b\x32\x0e.wallet.Wallet\"&\n\x11GetBalanceRequest\x12\x11\n\twallet_id\x18\x01 \x01(\t\"4\n\x12GetBalanceResponse\x12\x1e\n\x06wallet\x18\x01 \x01(\x0b\x32\x0e.wallet.Wallet\"m\n\x14TransferFundsRequest\x12\x16\n\x0e\x66rom_wallet_id\x18\x01 \x01(\t\x12\x14\n\x0cto_wallet_id\x18\x02 \x01(\t\x12\x0e\n\x06\x61mount\x18\x03 \x01(\x01\x12\x17\n\x0fto_phone_number\x18\x04 \x01(\t\"Q\n\x15TransferFundsResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x16\n\x0etransaction_id\x18\x02 \x01(\t\x12\x0f\n\x07message\x18\x03 \x01(\t\"1\n\x1cGetTransactionHistoryRequest\x12\x11\n\twallet_id\x18\x01 \x01(\t\"\xcd\x01\n\x0fTransactionInfo\x12\x16\n\x0etransaction_id\x18\x01 \x01(\t\x12\x16\n\x0e\x66rom_wallet_id\x18\x02 \x01(\t\x12\x14\n\x0cto_wallet_id\x18\x03 \x01(\t\x12\x0e\n\x06\x61mount\x18\x04 \x01(\x01\x12\x0e\n\x06status\x18\x05 \x01(\t\x12\x11\n\ttimestamp\x18\x06 \x01(\x01\x12\x15\n\rfrom_currency\x18\x07 \x01(\t\x12\x13\n\x0bto_currency\x18\x08 \x01(\t\x12\x15\n\rexchange_rate\x18\t \x01(\x01\"N\n\x1dGetTransactionHistoryResponse\x12-\n\x0ctransactions\x18\x01 \x03(\x0b\x32\x17.wallet.TransactionInfo\"0\n\x1bGetConversionHistoryRequest\x12\x11\n\twallet_id\x18\x01 \x01(\t\"\xaa\x01\n\x10\x43onversionRecord\x12\x16\n\x0etransaction_id\x18\x01 \x01(\t\x12\x15\n\rfrom_currency\x18\x02 \x01(\t\x12\x13\n\x0bto_currency\x18\x03 \x01(\t\x12\x0c\n\x04rate\x18\x04 \x01(\x01\x12\x17\n\x0f\x61mount_original\x18\x05 \x01(\x01\x12\x18\n\x10\x61mount_converted\x18\x06 \x01(\x01\x12\x11\n\ttimestamp\x18\x07 \x01(\x01\"I\n\x1cGetConversionHistoryResponse\x12)\n\x07records\x18\x01 \x03(\x0b\x32\x18.wallet.ConversionRecord\"%\n\x12ListWalletsRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\"6\n\x13ListWalletsResponse\x12\x1f\n\x07wallets\x18\x01 \x03(\x0b\x32\x0e.wallet.Wallet*Z\n\x08\x43urrency\x12\x18\n\x14\x43URRENCY_UNSPECIFIED\x10\x00\x12\x10\n\x0c\x43URRENCY_USD\x10\x01\x12\x10\n\x0c\x43URRENCY_INR\x10\x02\x12\x10\n\x0c\x43URRENCY_EUR\x10\x03\x32\xfe\x03\n\rWalletService\x12I\n\x0c\x43reateWallet\x12\x1b.wallet.CreateWalletRequest\x1a\x1c.wallet.CreateWalletResponse\x12\x43\n\nGetBalance\x12\x19.wallet.GetBalanceRequest\x1a\x1a.wallet.GetBalanceResponse\x12L\n\rTransferFunds\x12\x1c.wallet.TransferFundsRequest\x1a\x1d.wallet.TransferFundsResponse\x12\x64\n\x15GetTransactionHistory\x12$.wallet.GetTransactionHistoryRequest\x1a%.wallet.GetTransactionHistoryResponse\x12\x61\n\x14GetConversionHistory\x12#.wallet.GetConversionHistoryRequest\x1a$.wallet.GetConversionHistoryResponse\x12\x46\n\x0bListWallets\x12\x1a.wallet.ListWalletsRequest\x1a\x1b.wallet.ListWalletsResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'protos.wallet_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_CURRENCY']._serialized_start=822
-  _globals['_CURRENCY']._serialized_end=912
+  _globals['_CURRENCY']._serialized_start=1282
+  _globals['_CURRENCY']._serialized_end=1372
   _globals['_WALLET']._serialized_start=31
   _globals['_WALLET']._serialized_end=128
   _globals['_CREATEWALLETREQUEST']._serialized_start=130
@@ -50,9 +50,19 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_GETTRANSACTIONHISTORYREQUEST']._serialized_start=550
   _globals['_GETTRANSACTIONHISTORYREQUEST']._serialized_end=599
   _globals['_TRANSACTIONINFO']._serialized_start=602
-  _globals['_TRANSACTIONINFO']._serialized_end=740
-  _globals['_GETTRANSACTIONHISTORYRESPONSE']._serialized_start=742
-  _globals['_GETTRANSACTIONHISTORYRESPONSE']._serialized_end=820
-  _globals['_WALLETSERVICE']._serialized_start=915
-  _globals['_WALLETSERVICE']._serialized_end=1254
+  _globals['_TRANSACTIONINFO']._serialized_end=807
+  _globals['_GETTRANSACTIONHISTORYRESPONSE']._serialized_start=809
+  _globals['_GETTRANSACTIONHISTORYRESPONSE']._serialized_end=887
+  _globals['_GETCONVERSIONHISTORYREQUEST']._serialized_start=889
+  _globals['_GETCONVERSIONHISTORYREQUEST']._serialized_end=937
+  _globals['_CONVERSIONRECORD']._serialized_start=940
+  _globals['_CONVERSIONRECORD']._serialized_end=1110
+  _globals['_GETCONVERSIONHISTORYRESPONSE']._serialized_start=1112
+  _globals['_GETCONVERSIONHISTORYRESPONSE']._serialized_end=1185
+  _globals['_LISTWALLETSREQUEST']._serialized_start=1187
+  _globals['_LISTWALLETSREQUEST']._serialized_end=1224
+  _globals['_LISTWALLETSRESPONSE']._serialized_start=1226
+  _globals['_LISTWALLETSRESPONSE']._serialized_end=1280
+  _globals['_WALLETSERVICE']._serialized_start=1375
+  _globals['_WALLETSERVICE']._serialized_end=1885
 # @@protoc_insertion_point(module_scope)

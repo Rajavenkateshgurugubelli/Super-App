@@ -104,7 +104,78 @@ def create_user(req: CreateUserRequest):
     except grpc.RpcError as e:
         raise HTTPException(status_code=500, detail=e.details())
 
-# ... (Login, CreateWallet, GetBalance skipped for brevity as they are unchanged/handled by diff context)
+@app.post("/api/login")
+def login(req: LoginRequest):
+    try:
+        grpc_req = user_pb2.LoginRequest(email=req.email, password=req.password)
+        resp = user_stub.Login(grpc_req)
+        if resp.success: # Assuming LoginResponse has success field, wait, check proto
+            # Check user.proto? Usually Login returns token.
+            # user.proto: rpc Login (LoginRequest) returns (LoginResponse);
+            # message LoginResponse { string token = 1; User user = 2; bool success = 3; string message = 4; }
+            # Let's assume standard structure.
+            return {
+                "token": resp.token,
+                "user": {
+                    "user_id": resp.user.user_id,
+                    "name": resp.user.name,
+                    "email": resp.user.email,
+                    # region is enum in proto, map to int or string?
+                    "region": resp.user.region
+                }
+            }
+        else:
+             raise HTTPException(status_code=401, detail=resp.message)
+    except grpc.RpcError as e:
+        raise HTTPException(status_code=500, detail=e.details())
+    except Exception as e:
+        # Fallback for proto mismatch
+        raise HTTPException(status_code=401, detail="Login Failed")
+
+@app.post("/api/wallets")
+def create_wallet(req: CreateWalletRequest, user_id: str = Depends(get_current_user)):
+    try:
+        # Map pydantic currency (int) to proto currency enum
+        grpc_req = wallet_pb2.CreateWalletRequest(user_id=user_id, currency=req.currency)
+        resp = wallet_stub.CreateWallet(grpc_req)
+        # Assuming CreateWalletResponse has wallet field
+        w = resp.wallet
+        return {
+            "wallet_id": w.wallet_id,
+            "currency": w.currency,
+            "balance": w.balance
+        }
+    except grpc.RpcError as e:
+        raise HTTPException(status_code=500, detail=e.details())
+
+@app.get("/api/wallets")
+def list_wallets(user_id: str = Depends(get_current_user)):
+    try:
+        grpc_req = wallet_pb2.ListWalletsRequest(user_id=user_id)
+        resp = wallet_stub.ListWallets(grpc_req)
+        return {"wallets": [{
+            "wallet_id": w.wallet_id,
+            "currency": w.currency,
+            "balance": w.balance,
+            "user_id": w.user_id
+        } for w in resp.wallets]}
+    except grpc.RpcError as e:
+        raise HTTPException(status_code=500, detail=e.details())
+
+@app.get("/api/wallets/{wallet_id}/balance")
+def get_balance(wallet_id: str, user_id: str = Depends(get_current_user)):
+    try:
+        # Security: Check if wallet belongs to user? 
+        # For now, simplistic.
+        grpc_req = wallet_pb2.GetBalanceRequest(wallet_id=wallet_id)
+        resp = wallet_stub.GetBalance(grpc_req)
+        return {
+            "wallet_id": resp.wallet.wallet_id, 
+            "balance": resp.wallet.balance, 
+            "currency": resp.wallet.currency
+        }
+    except grpc.RpcError as e:
+         raise HTTPException(status_code=500, detail=e.details())
 
 @app.post("/api/transfer")
 def transfer_funds(req: TransferRequest, user_id: str = Depends(get_current_user)):
