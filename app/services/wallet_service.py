@@ -268,7 +268,7 @@ class WalletService(wallet_pb2_grpc.WalletServiceServicer):
                 except Exception as e:
                     self._logger.warning(f"Cache Invalidation Error: {e}")
 
-            # Emit Event (Phase 7.2)
+            # Emit Event (Phase 7.2) — Kafka
             self._emit_event("transactions", "TransactionInitiated", {
                 "transaction_id": txn_id,
                 "from_wallet": request.from_wallet_id,
@@ -277,6 +277,28 @@ class WalletService(wallet_pb2_grpc.WalletServiceServicer):
                 "currency": str(source_wallet.currency.name),
                 "timestamp": time.time()
             })
+
+            # Phase 3 (P-E): Publish Redis pub/sub notification to recipient user
+            # Gateway WebSocket handler subscribes to this channel per user
+            if self.redis_client and dest_wallet:
+                try:
+                    import json as _json
+                    notif_payload = _json.dumps({
+                        "event": "transfer_received",
+                        "transaction_id": txn_id,
+                        "from_wallet_id": request.from_wallet_id,
+                        "amount": debit_amount,
+                        "converted_amount": credit_amount,
+                        "currency": str(source_wallet.currency.name),
+                        "to_currency": str(dest_wallet.currency.name),
+                        "timestamp": time.time()
+                    })
+                    dest_user_id = dest_wallet.user_id
+                    channel = f"notifications:{dest_user_id}"
+                    self.redis_client.publish(channel, notif_payload)
+                    self._logger.info(f"Published notification to {channel}")
+                except Exception as ne:
+                    self._logger.warning(f"Redis pub/sub publish failed: {ne}")
 
             return wallet_pb2.TransferFundsResponse(
                 success=True,

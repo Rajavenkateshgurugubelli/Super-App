@@ -1,144 +1,160 @@
-# Super App Global Genesis Roadmap
+# Super App Global Genesis — Roadmap
 
-This document outlines the phased expansion of the Super App into a global, event-driven, secure, and decentralized financial operating system.
-
-## Milestone 1: Event-Driven & Edge Foundation (Phases 7–10)
-To scale globally, microservices must stop waiting on each other. We are moving from synchronous gRPC calls to asynchronous event streaming.
-
-### Phase 7: Event-Driven Architecture (Planned)
-**7.1 Message Broker Setup**
-- [ ] Install and configure Apache Kafka or Redpanda (for lower latency).
-- [ ] Create `docker-compose-kafka.yml` for local development.
-**7.2 Event Producers & Consumers**
-- [ ] Refactor WalletService to emit `TransactionInitiated` events instead of direct DB writes.
-- [ ] Create a dedicated NotificationService that consumes events and sends alerts.
-- [ ] Implement Dead Letter Queues (DLQ) for failed transaction events.
-
-### Phase 8: Edge Caching & High-Speed State (Planned)
-**8.1 Redis Integration**
-- [ ] Deploy a Redis cluster for edge caching.
-- [ ] Implement a Write-Through cache in FastAPI for user profiles.
-- [ ] Cache frequently accessed Policy/Compliance rules to reduce CockroachDB load.
-**8.2 Distributed Locking**
-- [ ] Implement Redis Redlock to prevent double-spending in the WalletService during concurrent requests.
-
-### Phase 9: Observability & Distributed Tracing (Planned)
-**9.1 OpenTelemetry Setup**
-- [ ] Install OpenTelemetry SDKs in the Python backend.
-- [ ] Instrument all gRPC and FastAPI endpoints to generate trace IDs.
-**9.2 Monitoring Stack**
-- [ ] Deploy Prometheus (metrics) and Jaeger (tracing) via Docker Compose.
-- [ ] Create a Grafana dashboard visualizing gRPC latency and transaction throughput.
-
-### Phase 10: Infrastructure as Code (IaC) (Planned)
-**10.1 Cloud Provisioning**
-- [ ] Initialize Terraform (`main.tf`, `variables.tf`).
-- [ ] Write Terraform modules to provision AWS ECS/EKS or GCP Cloud Run.
-- [ ] Automate CockroachDB managed cluster provisioning.
+> **Current Version:** 2.0.0 | **Last Updated:** 2026-02-20
 
 ---
 
-## Milestone 2: The Micro-Frontend (MFE) Shell (Phases 11–14)
-A Super App cannot be a monolith on the frontend. It must be a "Shell" that loads independent Mini-Apps dynamically.
+## ✅ Phase 2 Complete — Production Hardening & Full Feature Completeness
 
-### Phase 11: Micro-Frontend Architecture (Planned)
-**11.1 Webpack Module Federation**
-- [ ] Reconfigure the React/Vite app to use Webpack Module Federation (or Vite equivalent).
-- [ ] Create the Host/Shell application (handles routing and JWT state).
-- [ ] Extract the `WalletDashboard` into a standalone Remote/Mini-App.
+### P-A: Core Fixes ✅
+- [x] **Session Persistence** — `/api/me` endpoint restores session on page refresh (no more logout)
+- [x] **Signup Auto-Wallet** — New users automatically get a USD wallet created on registration
+- [x] **Proper Error Codes** — 409 Conflict for duplicate email, 401 for bad credentials, 404 for missing resources
+- [x] **Password Confirmation** — Signup form validates `confirm_password` client-side
 
-### Phase 12: Shared Ecosystem Resources (Planned)
+### P-B: Currency Conversion UI ✅
+- [x] **FX Rates Endpoint** — `GET /api/fx/rates` returns live rate matrix (USD base)
+- [x] **Conversion Quote Endpoint** — `POST /api/convert` for wallet-specific conversion previews
+- [x] **Convert Tab** — Fifth tab in WalletDashboard with from/to picker, amount input, animated quote result
+- [x] **FX Widget on Overview** — Live USD→INR and USD→EUR rates shown on overview page
+- [x] **Full Rate Table** — Tabular matrix of all 9 cross-currency pairs in the Convert tab
+
+### P-C: Rate Limiting ✅
+- [x] **Redis Sliding-Window** — 120 req/min per IP using sorted sets (ZRANGEBYSCORE)
+- [x] **Fail-Open Design** — Redis errors never block requests; graceful degradation
+- [x] **Configurable via Env** — `RATE_LIMIT_RPM` env variable
+- [x] **429 with Retry-After** — Standard HTTP response with `Retry-After: 60` header
+
+### UI/UX Overhaul ✅
+- [x] **Premium Dark Theme** — Glassmorphism, Inter font, indigo/violet/cyan gradient system
+- [x] **5-Tab Dashboard** — Overview / Send / Convert / History / Analytics
+- [x] **Session Bootstrap Spinner** — "Restoring session..." screen on reload
+- [x] **Toast Notifications** — Replaces browser `alert()` — animated overlay messages
+- [x] **Sticky Glass Nav** — User avatar chip + email + sign-out button
+
+---
+
+## Milestone 1: Event-Driven & Edge Foundation (Phases 7–10)
+
+### Phase 7: Event-Driven Architecture ✅ (Partially complete)
+**7.1 Message Broker Setup**
+- [x] Apache Kafka + Zookeeper deployed in docker-compose
+- [x] `docker-compose-kafka.yml` created
+**7.2 Event Producers & Consumers**
+- [x] WalletService emits `TransactionInitiated` / `TransactionCompleted` events
+- [x] NotificationService consumes Kafka events
+- [ ] Dead Letter Queues (DLQ) for failed transaction events
+
+### Phase 8: Edge Caching & High-Speed State ✅ (Partially complete)
+**8.1 Redis Integration**
+- [x] Redis deployed and connected in WalletService
+- [x] Write-through cache for wallet balances (60s TTL)
+- [ ] Cache for Policy/Compliance rules
+**8.2 Distributed Locking**
+- [x] Redis Redlock for double-spend prevention on TransferFunds
+
+### Phase 9: Observability & Distributed Tracing ✅
+**9.1 OpenTelemetry**
+- [x] OpenTelemetry SDK installed in backend and gateway
+- [x] All gRPC and FastAPI endpoints instrumented
+**9.2 Monitoring Stack**
+- [x] Jaeger deployed (traces at :16686)
+- [x] Prometheus deployed (metrics at :9090)
+- [ ] Grafana dashboard
+
+### Phase 10: Infrastructure as Code (IaC) ✅ (Partially complete)
+**10.1 Cloud Provisioning**
+- [x] Terraform configs initialized (`main.tf`, `variables.tf`)
+- [x] GCP Cloud Build YAML (`cloudbuild.yaml`)
+- [ ] Full ECS/EKS modules
+
+---
+
+## Milestone 2: Micro-Frontend Shell (Phases 11–14)
+
+### Phase 11: Micro-Frontend Architecture ✅
+**11.1 Vite Module Federation**
+- [x] Shell host application with JWT state management
+- [x] WalletDashboard extracted as Remote/Mini-App
+- [x] Shared React/ReactDOM via federation
+
+### Phase 12: Shared Ecosystem Resources ⚙️ (In Progress)
 **12.1 Universal Component Library**
-- [ ] Create a standalone React component library (buttons, modals, forms) using Tailwind.
-- [ ] Set up Storybook to document the UI kit.
-- [ ] Publish the library locally so all future Mini-Apps use the same design system.
+- [x] `shared-ui` package with Button component (vendored for Docker)
+- [ ] Storybook documentation
+- [ ] Full design system (Input, Modal, Card, Badge)
 
-### Phase 13: The Mobile Super App Container (Planned)
-**13.1 React Native / Expo Initialization**
-- [ ] Initialize `super-app-mobile` using Expo.
-- [ ] Implement the Mobile Shell native navigation.
-- [ ] Create WebViews or native bridging to load the web-based Mini-Apps dynamically inside the mobile shell.
+### Phase 13: Mobile Super App Container (Planned)
+- [ ] React Native / Expo initialization
+- [ ] Mobile Shell native navigation
+- [ ] WebViews for web-based Mini-Apps
 
 ### Phase 14: Mobile API Bridging (Planned)
-**14.1 Connect-Web/gRPC-Web**
-- [ ] Implement Envoy Proxy to translate gRPC calls for the mobile frontend.
-- [ ] Update the API Gateway to handle mobile-specific bandwidth constraints (payload compression).
+- [ ] Envoy Proxy for gRPC-Web
+- [ ] Payload compression for mobile bandwidth
 
 ---
 
 ## Milestone 3: Advanced Security & Sovereignty (Phases 15–18)
-Protecting the system against nation-state-level threats and complying with global data laws.
 
 ### Phase 15: Zero-Trust Service Mesh (Planned)
-**15.1 Istio / Linkerd**
-- [ ] Inject a Service Mesh sidecar into the backend Docker containers.
-- [ ] Enforce strict mTLS (Mutual TLS) between the UserService and WalletService.
-- [ ] Implement network policies denying all traffic except explicitly allowed routes.
+- [ ] Istio / Linkerd sidecar injection
+- [ ] mTLS between UserService and WalletService
+- [ ] Network policies (deny-by-default)
 
 ### Phase 16: Biometric & Passwordless Auth (Planned)
-**16.1 WebAuthn / Passkeys**
-- [ ] Update users table to store public key credentials.
-- [ ] Implement the WebAuthn API on the React frontend (FaceID/TouchID).
-- [ ] Modify the FastAPI gateway to issue JWTs based on cryptographic signatures rather than passwords.
+- [ ] WebAuthn / Passkeys
+- [ ] Public key credential storage
+- [ ] JWT issuance via cryptographic signatures
 
 ### Phase 17: Cross-Border Data Residency (Planned)
-**17.1 Geo-Routing Engine**
-- [ ] Enhance the Phase 1 Geo-Fencing Middleware to physically route EU requests to an EU database node and US/India requests to their respective nodes.
-- [ ] Implement data masking for cross-border admin queries (e.g., hiding PII if an Indian admin views a US user).
+- [ ] Geo-Routing Engine (EU → EU node, IN → IN node)
+- [ ] PII masking for cross-border admin queries
 
-### Phase 18: Advanced API Security (Planned)
-**18.1 Rate Limiting & WAF**
-- [ ] Implement sliding-window rate limiting in Redis to prevent DDoS attacks on the Gateway.
-- [ ] Set up a Web Application Firewall (WAF) rule set to block SQL injection and cross-site scripting (XSS).
+### Phase 18: Advanced API Security ✅ (Partially complete)
+**18.1 Rate Limiting**
+- [x] Redis sliding-window rate limiting (120 req/min per IP, configurable)
+- [x] 429 responses with `Retry-After` header
+- [ ] WAF (SQL injection / XSS blocking)
 
 ---
 
-## Milestone 4: Decentralized Ledger & Programmable Finance (Phases 19–22)
-Moving from a simple relational database to a system capable of handling complex, immutable, cross-border financial consensus.
+## Milestone 4: Decentralized Ledger (Phases 19–22) — Planned
 
-### Phase 19: Immutable Transaction Ledger (Planned)
-**19.1 Permissioned Blockchain Integration**
-- [ ] Deploy a lightweight private blockchain node (e.g., Hyperledger Fabric) alongside CockroachDB to act as an append-only, immutable audit trail.
-- [ ] Write "Chaincode" (smart contracts) to handle the absolute source of truth for wallet balances.
-- [ ] Sync state between the SQL database (for fast reads) and the ledger (for cryptographic proof).
+### Phase 19: Immutable Transaction Ledger
+- [ ] Hyperledger Fabric private blockchain node
+- [ ] Chaincode for wallet balances
+- [ ] SQL ↔ Ledger state sync
 
-### Phase 20: Decentralized Identity (DID) (Planned)
-**20.1 Self-Sovereign Identity**
-- [ ] Implement W3C standard Decentralized Identifiers (DIDs) for user accounts.
-- [ ] Create a Verifiable Credentials (VC) issuance flow (e.g., verifying KYC status without storing the raw passport data).
+### Phase 20: Decentralized Identity (Planned)
+- [ ] W3C DID implementation
+- [ ] Verifiable Credentials for KYC
 
 ### Phase 21: Financial Routing Arbitrage (Planned)
-**21.1 Smart-Routing Engine**
-- [ ] Build an algorithm in the WalletService that calculates the cheapest path for cross-border transfers (e.g., routing through a liquidity pool vs. standard ACH/SEPA).
-- [ ] Implement Webhooks to listen for asynchronous payment confirmations from third-party APIs.
+- [ ] Smart-routing algorithm (cheapest cross-border path)
+- [ ] Webhook listeners for payment confirmations
 
 ### Phase 22: Automated Reconciliation (Planned)
-**22.1 Cron Jobs & Auditing**
-- [ ] Write a Python daemon that runs nightly to reconcile the CockroachDB state against the Immutable Ledger state.
-- [ ] Generate automated compliance reports for financial regulators.
+- [ ] Nightly Python reconciliation daemon
+- [ ] Compliance reports for regulators
 
 ---
 
-## Milestone 5: AI Orchestration & High Availability (Phases 23–26)
-Making the app autonomous and virtually unkillable.
+## Milestone 5: AI Orchestration & HA (Phases 23–26) — Planned
 
-### Phase 23: On-Device AI Orchestrator (Planned)
-**23.1 Local LLM Integration**
-- [ ] Integrate a lightweight, open-source model (like Llama 3 Nano) into the mobile app shell for on-device natural language parsing.
-- [ ] Allow users to type "Send $50 to John" and have the AI map this to the exact gRPC endpoint without the user clicking through the UI.
+### Phase 23: On-Device AI Orchestrator
+- [ ] LLM integration (Llama 3 Nano) for NL payment intent parsing
+- [ ] "Send $50 to John" → auto-maps to gRPC endpoint
 
-### Phase 24: Real-Time Analytics Pipeline (Planned)
-**24.1 ClickHouse Deployment**
-- [ ] Deploy ClickHouse as an OLAP (Online Analytical Processing) database.
-- [ ] Stream logs and events from Kafka into ClickHouse.
-- [ ] Build an internal admin dashboard for real-time user behavior analytics.
+### Phase 24: Real-Time Analytics Pipeline
+- [ ] ClickHouse OLAP deployment
+- [ ] Kafka → ClickHouse event streaming
+- [ ] Internal admin analytics dashboard
 
-### Phase 25: Chaos Engineering (Planned)
-**25.1 Fault Tolerance Testing**
-- [ ] Implement scripts to randomly kill Docker containers (UserService, Redis) while load testing to ensure the system recovers automatically.
-- [ ] Verify that the frontend gracefully degrades (e.g., caching the user's last balance if the wallet service is down).
+### Phase 25: Chaos Engineering
+- [ ] Scripts to randomly kill containers under load
+- [ ] Frontend graceful degradation (last-known balance cache)
 
-### Phase 26: Multi-Region Active-Active Failover (Planned)
-**26.1 Global Disaster Recovery**
-- [ ] Simulate a full region outage (e.g., US-East goes offline).
-- [ ] Automate the DNS failover to route all traffic to the EU or India clusters with zero data loss.
+### Phase 26: Multi-Region Active-Active Failover
+- [ ] Region outage simulation
+- [ ] Automated DNS failover (zero data loss)

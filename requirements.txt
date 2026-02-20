@@ -5,7 +5,8 @@ pytest
 sqlalchemy
 alembic
 fastapi
-uvicorn
+uvicorn[standard]
+websockets
 python-multipart
 passlib[bcrypt]
 pyjwt

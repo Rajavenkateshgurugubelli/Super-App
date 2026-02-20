@@ -10,13 +10,13 @@ def create_admin():
         password_raw = "admin1"
         phone = "+11234567890"
 
-        # Check if admin exists
         existing_user = session.query(User).filter(User.email == email).first()
-        
         user_id = None
 
         if existing_user:
-            print("Admin user already exists.")
+            print("Admin user already exists — ensuring is_admin=True...")
+            existing_user.is_admin = True
+            session.commit()
             user_id = existing_user.user_id
         else:
             print("Creating admin user...")
@@ -28,7 +28,8 @@ def create_admin():
                 region=Region.US,
                 password_hash=get_password_hash(password_raw),
                 kyc_status=KycStatus.VERIFIED,
-                phone_number=phone
+                phone_number=phone,
+                is_admin=True
             )
             session.add(new_user)
             session.commit()
@@ -48,7 +49,7 @@ def create_admin():
             session.commit()
             print("Admin wallet created with $10,000 balance.")
         else:
-            print("Admin wallet already exists.")
+            print(f"Admin wallet already exists (balance={existing_wallet.balance}).")
 
     except Exception as e:
         print(f"Error creating admin: {e}")

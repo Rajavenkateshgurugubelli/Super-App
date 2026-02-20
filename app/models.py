@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Float, ForeignKey, Enum as SAEnum
+from sqlalchemy import Column, String, Integer, Float, ForeignKey, Boolean, Enum as SAEnum
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
@@ -48,6 +48,7 @@ class User(Base):
     user_id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
     email = Column(String, unique=True, index=True)
     password_hash = Column(String, nullable=True) # Nullable for existing users migration
+    is_admin = Column(Boolean, default=False, nullable=True)  # Phase 3: Admin role
     name = Column(String)
     region = Column(SAEnum(Region), default=Region.UNSPECIFIED)
     kyc_status = Column(SAEnum(KycStatus), default=KycStatus.PENDING)
