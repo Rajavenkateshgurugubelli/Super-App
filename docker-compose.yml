@@ -9,11 +9,16 @@ services:
       - DATABASE_URL=sqlite:///./superapp.db
       - KAFKA_BROKER_URL=kafka:9092
       - REDIS_URL=redis://redis:6379/0
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - OTEL_SERVICE_NAME=superapp-backend
+      - OTEL_METRICS_EXPORTER=prometheus # or none if we use explicit metric server
+      - PROM_PORT=9464 # Custom
     volumes:
       - ./superapp.db:/app/superapp.db
     depends_on:
       - kafka
       - redis
+      - jaeger
 
   redis:
     image: redis:alpine
@@ -27,12 +32,17 @@ services:
       - "8000:8000"
     environment:
       - GRPC_HOST=backend:50051
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - OTEL_SERVICE_NAME=superapp-gateway
     command: ["python", "gateway/main.py"]
+    volumes:
+      - ./superapp.db:/app/superapp.db
     depends_on:
       - backend
+      - jaeger
 
   zookeeper:
-    image: confluentinc/cp-zookeeper:latest
+    image: confluentinc/cp-zookeeper:6.2.0
     container_name: zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
@@ -41,18 +51,16 @@ services:
       - "22181:2181"
 
   kafka:
-    image: confluentinc/cp-kafka:latest
+    image: confluentinc/cp-kafka:6.2.0
     container_name: kafka
     depends_on:
       - zookeeper
     ports:
-      - "29092:29092"
+      - "29092:9092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
   notification-service:
@@ -63,9 +71,37 @@ services:
     depends_on:
       - kafka
 
-  frontend:
-    build: ./web
+  jaeger:
+    image: jaegertracing/all-in-one:latest
     ports:
-      - "5173:80" # Map host 5173 (standard vite port) to container 80 (nginx)
+      - "16686:16686"
+      - "4317:4317"
+      - "4318:4318"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+
+  wallet-mfe:
+    build:
+      context: .
+      dockerfile: frontend/wallet/Dockerfile
+    ports:
+      - "5001:80"
+
+  frontend:
+    build: ./frontend/shell
+    ports:
+      - "8080:80"
+    environment:
+      - GATEWAY_URL=http://gateway:8000
     depends_on:
       - gateway
+      - wallet-mfe

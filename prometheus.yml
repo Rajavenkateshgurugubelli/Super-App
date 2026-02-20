@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 10s
+
+scrape_configs:
+  - job_name: "superapp-gateway"
+    static_configs:
+      - targets: ["gateway:8000"]
+
+  - job_name: "superapp-backend"
+    static_configs:
+      - targets: ["backend:8000"] # Assuming we add an HTTP metrics endpoint to backend, or use another port.
+      # Backend is gRPC. We might need a separate HTTP server for /metrics or use a pushgateway.
+      # For simplicity, let's assume we expose metrics on port 8000? No, backend runs on 50051 (gRPC).
+      # The OTel instrumentation can start a Prometheus exporter server. Let's make backend listen on 9464 for metrics.
+      - targets: ["backend:9464"]

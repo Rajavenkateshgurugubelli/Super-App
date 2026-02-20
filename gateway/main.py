@@ -22,7 +22,31 @@ from app import user_pb2, user_pb2_grpc
 from app import wallet_pb2, wallet_pb2_grpc
 from app.security import SECRET_KEY, ALGORITHM
 
-app = FastAPI(title="Super App Gateway")
+# OpenTelemetry Imports
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.grpc import GrpcInstrumentorClient
+
+# Setup Tracing
+try:
+    resource = Resource.create(attributes={"service.name": os.environ.get("OTEL_SERVICE_NAME", "superapp-gateway")})
+    trace.set_tracer_provider(TracerProvider(resource=resource))
+    otlp_exporter = OTLPSpanExporter(endpoint=os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "http://jaeger:4317"), insecure=True)
+    trace.get_tracer_provider().add_span_processor(BatchSpanProcessor(otlp_exporter))
+
+    # Instrument gRPC Client
+    GrpcInstrumentorClient().instrument()
+    
+    app = FastAPI(title="Super App Gateway")
+    FastAPIInstrumentor.instrument_app(app) # Instruments requests
+except Exception as e:
+    print(f"Failed to initialize OpenTelemetry: {e}")
+    app = FastAPI(title="Super App Gateway") # Fallback creation
+
 security = HTTPBearer()
 
 # gRPC Channel
@@ -109,28 +133,26 @@ def login(req: LoginRequest):
     try:
         grpc_req = user_pb2.LoginRequest(email=req.email, password=req.password)
         resp = user_stub.Login(grpc_req)
-        if resp.success: # Assuming LoginResponse has success field, wait, check proto
-            # Check user.proto? Usually Login returns token.
-            # user.proto: rpc Login (LoginRequest) returns (LoginResponse);
-            # message LoginResponse { string token = 1; User user = 2; bool success = 3; string message = 4; }
-            # Let's assume standard structure.
+        # LoginResponse proto only has: token (str) and user (User)
+        # No success field — check token is non-empty
+        if resp.token:
             return {
                 "token": resp.token,
                 "user": {
                     "user_id": resp.user.user_id,
                     "name": resp.user.name,
                     "email": resp.user.email,
-                    # region is enum in proto, map to int or string?
                     "region": resp.user.region
                 }
             }
         else:
-             raise HTTPException(status_code=401, detail=resp.message)
+            raise HTTPException(status_code=401, detail="Invalid credentials")
     except grpc.RpcError as e:
-        raise HTTPException(status_code=500, detail=e.details())
+        raise HTTPException(status_code=401, detail=e.details())
+    except HTTPException:
+        raise
     except Exception as e:
-        # Fallback for proto mismatch
-        raise HTTPException(status_code=401, detail="Login Failed")
+        raise HTTPException(status_code=500, detail=f"Login error: {str(e)}")
 
 @app.post("/api/wallets")
 def create_wallet(req: CreateWalletRequest, user_id: str = Depends(get_current_user)):
@@ -151,16 +173,22 @@ def create_wallet(req: CreateWalletRequest, user_id: str = Depends(get_current_u
 @app.get("/api/wallets")
 def list_wallets(user_id: str = Depends(get_current_user)):
     try:
-        grpc_req = wallet_pb2.ListWalletsRequest(user_id=user_id)
-        resp = wallet_stub.ListWallets(grpc_req)
-        return {"wallets": [{
-            "wallet_id": w.wallet_id,
-            "currency": w.currency,
-            "balance": w.balance,
-            "user_id": w.user_id
-        } for w in resp.wallets]}
-    except grpc.RpcError as e:
-        raise HTTPException(status_code=500, detail=e.details())
+        # wallet_pb2 has no ListWallets RPC — query the shared DB directly
+        from app.database import SessionLocal
+        from app.models import Wallet
+        session = SessionLocal()
+        try:
+            wallets = session.query(Wallet).filter(Wallet.user_id == user_id).all()
+            return {"wallets": [{
+                "wallet_id": w.wallet_id,
+                "currency": w.currency.value if hasattr(w.currency, 'value') else str(w.currency),
+                "balance": float(w.balance),
+                "user_id": w.user_id
+            } for w in wallets]}
+        finally:
+            session.close()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/wallets/{wallet_id}/balance")
 def get_balance(wallet_id: str, user_id: str = Depends(get_current_user)):

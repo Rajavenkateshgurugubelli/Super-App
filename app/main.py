@@ -18,10 +18,34 @@ from app import user_pb2_grpc, wallet_pb2_grpc, policy_pb2_grpc
 from app.services import user_service, wallet_service, policy_service
 from app.middleware import interceptors
 
+# OpenTelemetry Imports
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.instrumentation.grpc import GrpcInstrumentorServer
+from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+
 def serve():
     # Configure logging
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     logger = logging.getLogger(__name__)
+
+    # Setup Tracing
+    try:
+        resource = Resource.create(attributes={"service.name": os.environ.get("OTEL_SERVICE_NAME", "superapp-backend")})
+        trace.set_tracer_provider(TracerProvider(resource=resource))
+        otlp_exporter = OTLPSpanExporter(endpoint=os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "http://jaeger:4317"), insecure=True)
+        trace.get_tracer_provider().add_span_processor(BatchSpanProcessor(otlp_exporter))
+
+        # Instrument gRPC Server
+        GrpcInstrumentorServer().instrument()
+        
+        # Instrument SQLAlchemy (for DB query tracing)
+        SQLAlchemyInstrumentor().instrument()
+    except Exception as e:
+        logger.error(f"Failed to initialize OpenTelemetry: {e}")
 
     # Initialize gRPC server with interceptors
     # We will enable interceptors later after verifying basic connectivity
