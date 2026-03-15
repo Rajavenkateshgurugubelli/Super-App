@@ -1,5 +1,6 @@
 import logging
 import uuid
+import json
 import grpc
 from app import user_pb2, user_pb2_grpc
 from app.database import SessionLocal
@@ -24,15 +25,33 @@ class UserService(user_pb2_grpc.UserServiceServicer):
 
             hashed_password = get_password_hash(request.password) if request.password else None
 
+            # Generate W3C DID
+            user_uuid = str(uuid.uuid4())
+            did_string = f"did:superapp:{user_uuid}"
+            did_doc = {
+                "@context": ["https://www.w3.org/ns/did/v1"],
+                "id": did_string,
+                "verificationMethod": [{
+                    "id": f"{did_string}#keys-1",
+                    "type": "Ed25519VerificationKey2020",
+                    "controller": did_string,
+                    # We would typically store the public key derived from user credentials here
+                    "publicKeyMultibase": "placeholder"
+                }],
+                "authentication": [f"{did_string}#keys-1"]
+            }
+
             # Create User model
             new_user = User(
-                user_id=str(uuid.uuid4()), 
+                user_id=user_uuid, 
                 email=request.email,
                 name=request.name,
                 region=models.Region(request.region), # Cast int to Enum
                 password_hash=hashed_password,
                 kyc_status=models.KycStatus.PENDING, 
-                phone_number=request.phone_number
+                phone_number=request.phone_number,
+                did=did_string,
+                did_document=json.dumps(did_doc)
             )
             
             session.add(new_user)

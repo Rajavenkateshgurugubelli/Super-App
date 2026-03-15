@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+*.egg
+venv/
+.venv/
+*.sqlite3
+*.db
+
+# mTLS Certificates (generated via scripts/gen_certs.sh)
+certs/
+
+# Node
+node_modules/
+frontend/*/node_modules/
+frontend/*/dist/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+compliance_reports/dlq_events.jsonl
+
+# OS
+.DS_Store
+Thumbs.db

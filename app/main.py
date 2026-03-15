@@ -68,10 +68,22 @@ def serve():
     # )
     # reflection.enable_server_reflection(SERVICE_NAMES, server)
 
-    # Bind to port
+    # Bind to port — use mTLS if GRPC_TLS=true
     port = '[::]:50051'
-    server.add_insecure_port(port)
-    logger.info(f"Server starting on {port}")
+    use_tls = os.environ.get("GRPC_TLS", "false").lower() == "true"
+    if use_tls:
+        try:
+            from app.security.tls import get_server_credentials
+            creds = get_server_credentials()
+            server.add_secure_port(port, creds)
+            logger.info(f"Server starting with mTLS on {port}")
+        except Exception as e:
+            logger.error(f"Failed to load TLS certs ({e}). Falling back to insecure.")
+            server.add_insecure_port(port)
+            logger.info(f"Server starting (insecure) on {port}")
+    else:
+        server.add_insecure_port(port)
+        logger.info(f"Server starting (insecure) on {port}")
     server.start()
     server.wait_for_termination()
 

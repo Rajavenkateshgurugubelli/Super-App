@@ -221,17 +221,24 @@ class WalletService(wallet_pb2_grpc.WalletServiceServicer):
                 # Fail open or closed? Security says closed.
                 return wallet_pb2.TransferFundsResponse(success=False, message="Policy Service Unavailable")
 
-            # Currency Conversion
+            # Currency Conversion & Smart Routing
             debit_amount = request.amount
             credit_amount = request.amount
             exchange_rate_value = 1.0
+            routing_fee = 0.0
+            routing_path = []
             
             if source_wallet.currency != dest_wallet.currency:
-                exchange_rate_value = self._get_exchange_rate(source_wallet.currency, dest_wallet.currency)
-                credit_amount = debit_amount * exchange_rate_value
-                self._logger.info(f"Converting {debit_amount} {source_wallet.currency} to {credit_amount} {dest_wallet.currency} (Rate: {exchange_rate_value})")
+                from app.services.routing_engine import calculate_optimal_route
+                route_info = calculate_optimal_route(request.amount, source_wallet.currency, dest_wallet.currency)
+                routing_fee = route_info["fee_amount"]
+                exchange_rate_value = route_info["rate"]
+                credit_amount = route_info["final_amount"]
+                routing_path = route_info["path"]
+                
+                self._logger.info(f"Smart Routing applied. Path: {' -> '.join(routing_path)}. Fee: {routing_fee}. Final: {credit_amount}")
 
-            # Perform Transfer
+            # Perform Transfer (fee is essentially deducted natively from the credit constraint via spread)
             source_wallet.balance -= debit_amount
             dest_wallet.balance += credit_amount
 
@@ -268,14 +275,17 @@ class WalletService(wallet_pb2_grpc.WalletServiceServicer):
                 except Exception as e:
                     self._logger.warning(f"Cache Invalidation Error: {e}")
 
-            # Emit Event (Phase 7.2) — Kafka
-            self._emit_event("transactions", "TransactionInitiated", {
+            # Emit Event (Phase 7.2 & 21.2) — Kafka
+            self._emit_event("transactions", "TransactionCompleted", {
                 "transaction_id": txn_id,
                 "from_wallet": request.from_wallet_id,
                 "to_wallet": target_wallet_id,
                 "amount": request.amount,
+                "fee_assessed": routing_fee,
                 "currency": str(source_wallet.currency.name),
-                "timestamp": time.time()
+                "routing_path": routing_path,
+                "timestamp": time.time(),
+                "webhook_url": "http://localhost:8080/webhook-mock" # Mock webhook URL for Phase 21 testing
             })
 
             # Phase 3 (P-E): Publish Redis pub/sub notification to recipient user

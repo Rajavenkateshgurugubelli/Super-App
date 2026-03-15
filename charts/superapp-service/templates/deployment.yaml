@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "superapp-service.fullname" . }}
+  labels:
+    {{- include "superapp-service.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "superapp-service.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "superapp-service.selectorLabels" . | nindent 8 }}
+        # Istio sidecar injection target
+        sidecar.istio.io/inject: "true"
+    spec:
+      serviceAccountName: {{ include "superapp-service.serviceAccountName" . }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          # Readiness and Liveness Probes
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.livenessPath | default "/health" }}
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.readinessPath | default "/health" }}
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          # Env vars mapped dynamically
+          env:
+            {{- toYaml .Values.env | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

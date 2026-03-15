@@ -1,0 +1,37 @@
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: wallet-service-cb
+  namespace: superapp-prod
+spec:
+  host: wallet-service.superapp-prod.svc.cluster.local
+  trafficPolicy:
+    # Aggressively break circuits to preserve database pool
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        http1MaxPendingRequests: 10
+        maxRequestsPerConnection: 10
+    outlierDetection:
+      # If a pod returns 5 consecutive 5xx errors...
+      consecutive5xxErrors: 5
+      # ...wait 10 seconds before polling it again
+      interval: 10s
+      baseEjectionTime: 30s
+      # Up to 100% of the nodes can be ejected if they are all failing
+      maxEjectionPercent: 100
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: user-service-cb
+  namespace: superapp-prod
+spec:
+  host: user-service.superapp-prod.svc.cluster.local
+  trafficPolicy:
+    outlierDetection:
+      consecutive5xxErrors: 3
+      interval: 5s
+      baseEjectionTime: 15s
+      maxEjectionPercent: 50

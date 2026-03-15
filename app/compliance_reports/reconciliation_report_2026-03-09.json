@@ -1,0 +1,13 @@
+{
+    "timestamp": "2026-03-09T05:25:09.645721Z",
+    "wallets_scanned": 1,
+    "discrepancies_found": 1,
+    "details": [
+        {
+            "wallet_id": "6ed0a08f-a95b-4e97-9cdd-64862987e03e",
+            "expected_balance": 0.0,
+            "actual_balance": 10000.0,
+            "variance": -10000.0
+        }
+    ]
+}

@@ -1,0 +1,41 @@
+# Default values for superapp-service chart.
+
+replicaCount: 2
+
+image:
+  repository: superapp/my-service # overriding globally
+  pullPolicy: IfNotPresent
+  tag: "1.0.0"
+
+serviceAccount:
+  create: true
+  name: ""
+
+service:
+  type: ClusterIP
+  port: 8000
+
+probes:
+  livenessPath: "/health"
+  readinessPath: "/health"
+
+env: []
+  # - name: DATABASE_URL
+  #   valueFrom:
+  #     secretKeyRef:
+  #       name: db-credentials
+  #       key: url
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 75

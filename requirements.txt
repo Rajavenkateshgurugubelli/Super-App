@@ -19,3 +19,6 @@ opentelemetry-instrumentation-grpc
 opentelemetry-exporter-otlp
 opentelemetry-instrumentation-sqlalchemy
 prometheus-client
+apscheduler
+clickhouse-driver
+py_webauthn

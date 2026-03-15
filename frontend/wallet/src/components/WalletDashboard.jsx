@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import Analytics from './Analytics';
-
-const CURRENCY_MAP = { 1: 'USD', 2: 'INR', 3: 'EUR' };
-const CURRENCY_SYMBOL = { 1: '$', 2: '₹', 3: '€', USD: '$', INR: '₹', EUR: '€' };
-const CURRENCY_FLAG = { 1: '🇺🇸', 2: '🇮🇳', 3: '🇪🇺' };
-const ALL_CURRENCIES = [{ id: 1, code: 'USD', flag: '🇺🇸', name: 'US Dollar' }, { id: 2, code: 'INR', flag: '🇮🇳', name: 'Indian Rupee' }, { id: 3, code: 'EUR', flag: '🇪🇺', name: 'Euro' }];
+import {
+    CURRENCIES,
+    CURRENCY_BY_ID,
+    ALL_CURRENCIES,
+    formatMoney,
+} from '../payments/config/currencies.js';
 
 /* ── Inline Styles ──────────────────────────────────────────────────────────── */
 const S = `
@@ -163,8 +164,11 @@ const WalletDashboard = ({ user }) => {
         finally { setConvertLoading(false); }
     };
 
-    const currencyCode = wallet ? (CURRENCY_MAP[wallet.currency] || 'USD') : 'USD';
-    const currencySymbol = wallet ? (CURRENCY_SYMBOL[wallet.currency] || '$') : '$';
+    const currencyConfig = wallet
+        ? CURRENCY_BY_ID[wallet.currency] || CURRENCIES.USD
+        : CURRENCIES.USD;
+    const currencyCode = currencyConfig.code;
+    const currencySymbol = currencyConfig.symbol;
 
     if (!user) return null;
     if (!wallet) return (
@@ -206,7 +210,7 @@ const WalletDashboard = ({ user }) => {
                             {CURRENCY_FLAG[wallet.currency]} Total Balance
                         </div>
                         <div style={{ fontSize: 48, fontWeight: 900, letterSpacing: '-2.5px', color: 'white', lineHeight: 1 }}>
-                            {currencySymbol}{balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            {formatMoney(balance, currencyCode)}
                         </div>
                         <div style={{ marginTop: 10, fontSize: 12, color: 'rgba(255,255,255,.45)', display: 'flex', alignItems: 'center', gap: 8 }}>
                             <span>{currencyCode} Wallet</span>
@@ -238,8 +242,8 @@ const WalletDashboard = ({ user }) => {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 20 }}>
                 {[
                     { label: 'Transactions', value: transactions.length, icon: '⇄', color: '#818cf8', bg: 'rgba(129,140,248,.12)' },
-                    { label: 'Total Sent', value: `${currencySymbol}${sentTotal.toFixed(0)}`, icon: '↑', color: '#ef4444', bg: 'rgba(239,68,68,.12)' },
-                    { label: 'Total Received', value: `${currencySymbol}${recvTotal.toFixed(0)}`, icon: '↓', color: '#10b981', bg: 'rgba(16,185,129,.12)' },
+                    { label: 'Total Sent', value: formatMoney(sentTotal, currencyCode), icon: '↑', color: '#ef4444', bg: 'rgba(239,68,68,.12)' },
+                    { label: 'Total Received', value: formatMoney(recvTotal, currencyCode), icon: '↓', color: '#10b981', bg: 'rgba(16,185,129,.12)' },
                 ].map(s => (
                     <div key={s.label} className="wd-card" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                         <div style={{ width: 40, height: 40, borderRadius: 10, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: s.color, flexShrink: 0 }}>{s.icon}</div>
@@ -367,7 +371,9 @@ const WalletDashboard = ({ user }) => {
                                     <input className="wd-input" type="number" placeholder="0.00" step="0.01" min="0.01" style={{ paddingLeft: 30 }}
                                         value={transferData.amount} onChange={e => setTransferData(d => ({ ...d, amount: e.target.value }))} required />
                                 </div>
-                                <div style={{ fontSize: 11, color: '#475569', marginTop: 6 }}>Available: {currencySymbol}{balance.toFixed(2)}</div>
+                                <div style={{ fontSize: 11, color: '#475569', marginTop: 6 }}>
+                                    Available: {formatMoney(balance, currencyCode)}
+                                </div>
                             </div>
                             <button type="submit" className="wd-btn" disabled={loading}>
                                 {loading ? <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><Spinner />Processing...</span>
@@ -426,7 +432,9 @@ const WalletDashboard = ({ user }) => {
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
                                         <div>
                                             <div style={{ fontSize: 11, color: '#64748b' }}>You Send</div>
-                                            <div style={{ fontSize: 24, fontWeight: 900, color: '#f1f5f9' }}>{currencySymbol}{convertResult.amount_original.toFixed(2)}</div>
+                                            <div style={{ fontSize: 24, fontWeight: 900, color: '#f1f5f9' }}>
+                                                {formatMoney(convertResult.amount_original, convertResult.from_currency)}
+                                            </div>
                                             <div style={{ fontSize: 11, color: '#64748b' }}>{convertResult.from_currency}</div>
                                         </div>
                                         <div style={{ fontSize: 28, color: '#10b981' }}>→</div>

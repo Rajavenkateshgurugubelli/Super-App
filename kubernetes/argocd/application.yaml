@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: superapp-prod
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: "https://github.com/Rajavenkateshgurugubelli/Super-App.git"
+    targetRevision: main
+    path: charts/superapp-service
+    helm:
+      valueFiles:
+        - values-prod.yaml
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: superapp-prod
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

@@ -1,0 +1,35 @@
+apiVersion: security.istio.io/v1beta1
+kind: RequestAuthentication
+metadata:
+  name: jwt-authn
+  namespace: superapp-prod
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gateway
+  jwtRules:
+    - issuer: "superapp-auth-service"
+      # In production, this points to the internal JWKS (JSON Web Key Set) endpoint
+      # exposed by the User/Auth service, allowing Envoy to cache the public keys.
+      jwksUri: "http://user-service.superapp-prod.svc.cluster.local:50051/.well-known/jwks.json"
+      forwardOriginalToken: true
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: require-jwt
+  namespace: superapp-prod
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gateway
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            # Require a valid JWT issued by our internal service
+            requestPrincipals: ["superapp-auth-service/*"]
+      to:
+        - operation:
+            # Apply to protected API routes
+            paths: ["/api/wallets*", "/api/transfer*", "/api/ai/execute"]

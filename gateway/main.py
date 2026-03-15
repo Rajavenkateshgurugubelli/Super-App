@@ -11,6 +11,9 @@ import json
 import asyncio
 import redis as redis_lib
 import redis.asyncio as aioredis
+import re
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 # ── Path setup ─────────────────────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -23,6 +26,8 @@ if APP_DIR not in sys.path:
 from app import user_pb2, user_pb2_grpc
 from app import wallet_pb2, wallet_pb2_grpc
 from app.security import SECRET_KEY, ALGORITHM
+import hmac
+import hashlib
 
 # ── OpenTelemetry ──────────────────────────────────────────────────────────────
 from opentelemetry import trace
@@ -53,6 +58,80 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── WAF Middleware ─────────────────────────────────────────────────────────────
+SQLI_PATTERN = re.compile(r"(?i)(UNION.*SELECT|SELECT.*FROM|INSERT.*INTO|UPDATE.*SET|DELETE.*FROM|DROP.*TABLE|EXEC.*xp_cmdshell|--|\bOR\b.*=)")
+XSS_PATTERN = re.compile(r"(?i)(<script>|javascript:|onerror=|onload=|eval\()")
+
+class WafMiddleware:
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        req = Request(scope, receive)
+
+        # 1. Check Query Params
+        query_string = req.url.query
+        if SQLI_PATTERN.search(query_string) or XSS_PATTERN.search(query_string):
+            from fastapi.responses import JSONResponse
+            res = JSONResponse(status_code=403, content={"detail": "WAF Blocked: Malicious query parameters detected."})
+            return await res(scope, receive, send)
+
+        # 2. Check Body Payload Data (Interceptor trick for ASGI)
+        body_bytes = b""
+        more_body = True
+        
+        async def receive_wrapper() -> Message:
+            nonlocal body_bytes, more_body
+            if more_body:
+                message = await receive()
+                body_bytes += message.get("body", b"")
+                more_body = message.get("more_body", False)
+                return message
+            return {"type": "http.request", "body": b"", "more_body": False}
+        
+        # Read the entire body up front
+        while more_body:
+            message = await receive()
+            body_bytes += message.get("body", b"")
+            more_body = message.get("more_body", False)
+
+        decoded_body = body_bytes.decode('utf-8', errors='ignore')
+        
+        if SQLI_PATTERN.search(decoded_body) or XSS_PATTERN.search(decoded_body):
+            from fastapi.responses import JSONResponse
+            res = JSONResponse(status_code=403, content={"detail": "WAF Blocked: Malicious payload detected."})
+            return await res(scope, receive, send)
+            
+        # 3. HMAC Signature Verification (if it's a mutating request)
+        if req.method in ["POST", "PUT", "PATCH"] and body_bytes:
+            client_sig = req.headers.get("X-Signature")
+            if not client_sig:
+                from fastapi.responses import JSONResponse
+                return await JSONResponse(status_code=403, content={"detail": "Missing X-Signature header for payload integrity."})(scope, receive, send)
+            
+            # Recompute signature
+            expected_sig = hmac.new(
+                SECRET_KEY.encode('utf-8'), 
+                body_bytes, 
+                hashlib.sha256
+            ).hexdigest()
+
+            # Time-constant compare
+            if not hmac.compare_digest(client_sig, expected_sig):
+                from fastapi.responses import JSONResponse
+                return await JSONResponse(status_code=403, content={"detail": "Payload signature mismatch. Tampering detected."})(scope, receive, send)
+
+        # Re-emit the read body for the actual handler
+        async def receive_re_emit() -> Message:
+            return {"type": "http.request", "body": body_bytes, "more_body": False}
+
+        await self.app(scope, receive_re_emit, send)
+
+app.add_middleware(WafMiddleware)
 
 # ── Redis (sync for rate limiting; async for pub/sub WebSocket) ────────────────
 REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
@@ -98,7 +177,14 @@ if GRPC_SECURE:
         GRPC_HOST = GRPC_HOST.replace("https://", "")
         if ":" not in GRPC_HOST:
             GRPC_HOST = f"{GRPC_HOST}:443"
-    channel = grpc.secure_channel(GRPC_HOST, grpc.ssl_channel_credentials())
+    # Try mTLS with client cert first, then fall back to plain TLS
+    try:
+        from app.security.tls import get_channel_credentials
+        channel = grpc.secure_channel(GRPC_HOST, get_channel_credentials())
+        print("Gateway: mTLS channel established (client cert + CA)")
+    except Exception as e:
+        print(f"Gateway: mTLS cert load failed ({e}), using plain TLS")
+        channel = grpc.secure_channel(GRPC_HOST, grpc.ssl_channel_credentials())
 else:
     channel = grpc.insecure_channel(GRPC_HOST)
 
@@ -144,6 +230,57 @@ def require_admin(token_data: dict = Depends(get_token_data)):
 FX_RATES_USD_BASE = {1: 1.0, 2: 83.12, 3: 0.918}
 CURRENCY_NAMES = {1: "USD", 2: "INR", 3: "EUR"}
 
+FX_CACHE_TTL = 300  # 5 minutes
+POLICY_CACHE_TTL = 600  # 10 minutes
+
+# Default compliance policy rules (cached in Redis on first request)
+_DEFAULT_POLICIES = {
+    "version": "1.0",
+    "transfer_limits_usd": {
+        "per_transaction": 10000.0,
+        "daily": 50000.0,
+        "monthly": 200000.0,
+    },
+    "geo_fencing": {
+        "blocked_regions": [],
+        "high_risk_regions": ["UNSPECIFIED"],
+        "require_kyc_above_usd": 1000.0,
+    },
+    "rate_limiting": {
+        "requests_per_minute": int(os.environ.get("RATE_LIMIT_RPM", "120")),
+    },
+    "kyc": {
+        "auto_approve_below_usd": 500.0,
+        "manual_review_above_usd": 5000.0,
+    },
+}
+
+def _get_cached_fx_rates():
+    """Return FX rate matrix from Redis cache (5 min TTL) or compute live."""
+    CACHE_KEY = "fx:rates"
+    if _redis_sync:
+        try:
+            cached = _redis_sync.get(CACHE_KEY)
+            if cached:
+                return json.loads(cached)
+        except Exception:
+            pass
+    # Compute fresh rates
+    rates = {}
+    for fc, fn in CURRENCY_NAMES.items():
+        rates[fn] = {
+            CURRENCY_NAMES[tc]: round(FX_RATES_USD_BASE[tc] / FX_RATES_USD_BASE[fc], 6)
+            for tc in CURRENCY_NAMES
+        }
+    payload = {"rates": rates, "base": "USD", "updated_at": int(time.time()), "cached": False}
+    if _redis_sync:
+        try:
+            _redis_sync.setex(CACHE_KEY, FX_CACHE_TTL, json.dumps(payload))
+            payload["cached"] = False  # first write — actually fresh
+        except Exception:
+            pass
+    return payload
+
 def _convert_amount(amount: float, from_c: int, to_c: int):
     rate = FX_RATES_USD_BASE.get(to_c, 1.0) / FX_RATES_USD_BASE.get(from_c, 1.0)
     return round(amount * rate, 4), round(rate, 6)
@@ -176,6 +313,9 @@ class ConvertRequest(BaseModel):
 
 class UpdateProfileRequest(BaseModel):
     name: str
+
+class ExecuteNLRequest(BaseModel):
+    command: str
 
 # ── Health ─────────────────────────────────────────────────────────────────────
 @app.get("/health")
@@ -265,6 +405,50 @@ def update_profile(req: UpdateProfileRequest, token_data: dict = Depends(get_tok
     except grpc.RpcError as e:
         raise HTTPException(status_code=500, detail=e.details())
 
+@app.get("/api/users/{user_id}/kyc-credential")
+def get_kyc_credential(user_id: str, token_data: dict = Depends(get_token_data)):
+    import datetime
+    import uuid
+    # Verify authorization
+    if token_data["user_id"] != user_id:
+        db_user = _db_get_user(token_data["user_id"])
+        if not db_user or not db_user.is_admin:
+            raise HTTPException(status_code=403, detail="Not authorized to access this credential")
+            
+    target_user = _db_get_user(user_id)
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    if not target_user.did:
+        raise HTTPException(status_code=400, detail="User does not have a registered DID")
+        
+    issuer_did = "did:superapp:admin"
+    
+    vc_payload = {
+        "@context": [
+            "https://www.w3.org/2018/credentials/v1",
+            "https://www.w3.org/2018/credentials/examples/v1"
+        ],
+        "id": f"http://superapp.internal/credentials/{uuid.uuid4()}",
+        "type": ["VerifiableCredential", "KycCredential"],
+        "issuer": issuer_did,
+        "issuanceDate": datetime.datetime.utcnow().isoformat() + "Z",
+        "credentialSubject": {
+            "id": target_user.did,
+            "kycStatus": target_user.kyc_status.name,
+            "region": target_user.region.name
+        }
+    }
+    
+    # Generate JWT proof
+    token = jwt.encode({"vc": vc_payload, "iss": issuer_did, "sub": target_user.did}, SECRET_KEY, algorithm=ALGORITHM)
+    
+    return {
+        "verifiableCredential": vc_payload,
+        "jwt": token,
+        "status": "ISSUED"
+    }
+
 # ── Wallet endpoints ───────────────────────────────────────────────────────────
 @app.post("/api/wallets")
 def create_wallet(req: CreateWalletRequest, user_id: str = Depends(get_current_user)):
@@ -335,10 +519,29 @@ def transfer_funds(req: TransferRequest, user_id: str = Depends(get_current_user
 # ── FX / Convert ───────────────────────────────────────────────────────────────
 @app.get("/api/fx/rates")
 def get_fx_rates():
-    rates = {}
-    for fc, fn in CURRENCY_NAMES.items():
-        rates[fn] = {CURRENCY_NAMES[tc]: round(FX_RATES_USD_BASE[tc] / FX_RATES_USD_BASE[fc], 6) for tc in CURRENCY_NAMES}
-    return {"rates": rates, "base": "USD", "updated_at": int(time.time())}
+    """Returns FX rate matrix, served from Redis cache (5 min TTL)."""
+    return _get_cached_fx_rates()
+
+@app.get("/api/policies")
+def get_policies():
+    """Returns active compliance and policy rules (Redis-cached, 10 min TTL)."""
+    CACHE_KEY = "policies:active"
+    if _redis_sync:
+        try:
+            cached = _redis_sync.get(CACHE_KEY)
+            if cached:
+                data = json.loads(cached)
+                data["cached"] = True
+                return data
+        except Exception:
+            pass
+    payload = {**_DEFAULT_POLICIES, "cached": False, "retrieved_at": int(time.time())}
+    if _redis_sync:
+        try:
+            _redis_sync.setex(CACHE_KEY, POLICY_CACHE_TTL, json.dumps(payload))
+        except Exception:
+            pass
+    return payload
 
 @app.post("/api/convert")
 def convert_currency(req: ConvertRequest, user_id: str = Depends(get_current_user)):
@@ -355,6 +558,58 @@ def convert_currency(req: ConvertRequest, user_id: str = Depends(get_current_use
         raise HTTPException(status_code=500, detail=e.details())
 
 # ── P-D: Admin endpoints ───────────────────────────────────────────────────────
+@app.post("/api/ai/execute")
+def execute_ai_command(req: ExecuteNLRequest, user_id: str = Depends(get_current_user)):
+    from app.services.ai_orchestrator import execute_nl_command
+    from app.database import SessionLocal
+    from app.models import Wallet
+    
+    intent = execute_nl_command(req.command)
+    action = intent.get("action")
+    payload = intent.get("payload", {})
+    
+    if action == "unknown":
+        raise HTTPException(status_code=400, detail="Command not understood.")
+        
+    session = SessionLocal()
+    try:
+        # Resolve user's primary wallet USD
+        user_wallet = session.query(Wallet).filter(Wallet.user_id == user_id, Wallet.currency == 1).first()
+        if not user_wallet:
+             # Just fallback to any first wallet
+             user_wallet = session.query(Wallet).filter(Wallet.user_id == user_id).first()
+             
+        if not user_wallet:
+            raise HTTPException(status_code=400, detail="You do not have a registered wallet.")
+
+        if action == "transfer":
+            amount = payload.get("amount")
+            target = payload.get("to_target")
+            
+            # Map to TransferFunds Request
+            transfer_req = TransferRequest(
+                from_wallet_id=user_wallet.wallet_id,
+                to_phone_number=target if target.startswith('+') else None,
+                to_wallet_id=target if not target.startswith('+') else None,
+                amount=amount
+            )
+            
+            # Re-use existing transfer function locally
+            try:
+                res = transfer_funds(transfer_req, user_id)
+                return {"success": True, "message": f"Successfully executed intent: Transferred {amount} to {target}", "transaction": res}
+            except HTTPException as e:
+                return {"success": False, "message": f"Failed to execute intent: {str(e.detail)}"}
+                
+        elif action == "check_balance":
+            res = get_balance(user_wallet.wallet_id, user_id)
+            return {"success": True, "message": f"Successfully executed intent: Balance is {res['balance']} {res['currency']}"}
+            
+    finally:
+         session.close()
+         
+    return {"success": False, "message": "Intent action not fully implemented by gateway mapping"}
+
 @app.get("/api/admin/stats")
 def admin_stats(admin_id: str = Depends(require_admin)):
     from app.database import SessionLocal
@@ -488,6 +743,121 @@ async def websocket_notifications(websocket: WebSocket, user_id: str, token: str
                 await redis_async.aclose()
             except Exception:
                 pass
+
+# ── Phase 16: WebAuthn / Passkeys ─────────────────────────────────────────────
+class WebAuthnRegisterBeginRequest(BaseModel):
+    label: str = "My Passkey"
+
+class WebAuthnLoginBeginRequest(BaseModel):
+    email: str
+
+class WebAuthnLoginCompleteRequest(BaseModel):
+    assertion: dict
+    challenge_email: str  # email used to look up the user for sign_count update
+
+@app.post("/api/auth/webauthn/register/begin")
+def webauthn_register_begin(
+    req: WebAuthnRegisterBeginRequest,
+    token_data: dict = Depends(get_token_data),
+):
+    """Generate a WebAuthn credential creation challenge (auth required)."""
+    from app.services.webauthn_service import begin_registration
+    from app.database import SessionLocal
+    from app.models import User as UserModel
+    user_id = token_data["user_id"]
+    session = SessionLocal()
+    try:
+        user = session.query(UserModel).filter(UserModel.user_id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        options = begin_registration(
+            user_id=user_id,
+            user_name=user.email,
+            user_display_name=user.name or user.email,
+        )
+        return options
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        session.close()
+
+@app.post("/api/auth/webauthn/register/complete", status_code=201)
+def webauthn_register_complete(
+    credential: dict,
+    label: str = "My Passkey",
+    token_data: dict = Depends(get_token_data),
+):
+    """Verify attestation and store the new passkey credential."""
+    from app.services.webauthn_service import complete_registration
+    user_id = token_data["user_id"]
+    try:
+        cred = complete_registration(user_id=user_id, credential_json=credential, label=label)
+        return {
+            "success": True,
+            "credential_id": cred.credential_id,
+            "label": cred.label,
+            "created_at": cred.created_at,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/auth/webauthn/login/begin")
+def webauthn_login_begin(req: WebAuthnLoginBeginRequest):
+    """Generate an assertion challenge for a passkey login (public endpoint)."""
+    from app.services.webauthn_service import begin_authentication
+    from app.database import SessionLocal
+    from app.models import User as UserModel
+    session = SessionLocal()
+    try:
+        user = session.query(UserModel).filter(UserModel.email == req.email).first()
+        user_id = user.user_id if user else None
+        options = begin_authentication(user_id=user_id)
+        return options
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        session.close()
+
+@app.post("/api/auth/webauthn/login/complete")
+def webauthn_login_complete(req: WebAuthnLoginCompleteRequest):
+    """Verify the passkey assertion and issue a JWT token."""
+    from app.services.webauthn_service import complete_authentication
+    from app.database import SessionLocal
+    from app.models import User as UserModel
+    try:
+        user_id = complete_authentication(assertion_json=req.assertion)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    # Issue JWT using the same logic as /api/login
+    session = SessionLocal()
+    try:
+        user = session.query(UserModel).filter(UserModel.user_id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        token = jwt.encode(
+            {"user_id": user_id, "email": user.email},
+            SECRET_KEY,
+            algorithm=ALGORITHM,
+        )
+        return {
+            "token": token,
+            "user": {
+                "user_id": user.user_id,
+                "name": user.name,
+                "email": user.email,
+                "is_admin": bool(user.is_admin),
+                "auth_method": "passkey",
+            },
+        }
+    finally:
+        session.close()
 
 if __name__ == "__main__":
     import uvicorn

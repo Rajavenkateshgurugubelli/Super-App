@@ -10,7 +10,7 @@ services:
       - KAFKA_BROKER_URL=kafka:9092
       - REDIS_URL=redis://redis:6379/0
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
-      - OTEL_SERVICE_NAME=superapp-backend
+      - OTEL_SERVICE_NAME=superapp-backend-us
       - OTEL_METRICS_EXPORTER=prometheus # or none if we use explicit metric server
       - PROM_PORT=9464 # Custom
     volumes:
@@ -20,11 +20,23 @@ services:
       - redis
       - jaeger
 
-  redis:
-    image: redis:alpine
-    container_name: redis
+  backend-eu:
+    build: .
     ports:
-      - "6379:6379"
+      - "50052:50051" # Maps to internal 50051
+    environment:
+      - DATABASE_URL=sqlite:///./superapp.db
+      - KAFKA_BROKER_URL=kafka:9092
+      - REDIS_URL=redis://redis:6379/0
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - OTEL_SERVICE_NAME=superapp-backend-eu
+      - OTEL_METRICS_EXPORTER=prometheus
+    volumes:
+      - ./superapp.db:/app/superapp.db
+    depends_on:
+      - kafka
+      - redis
+      - jaeger
 
   gateway:
     build: .
@@ -33,13 +45,38 @@ services:
     environment:
       - GRPC_HOST=backend:50051
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
-      - OTEL_SERVICE_NAME=superapp-gateway
+      - OTEL_SERVICE_NAME=superapp-gateway-us
     command: ["python", "gateway/main.py"]
     volumes:
       - ./superapp.db:/app/superapp.db
     depends_on:
       - backend
       - jaeger
+
+  gateway-eu:
+    build: .
+    ports:
+      - "8001:8000"
+    environment:
+      - GRPC_HOST=backend-eu:50051
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - OTEL_SERVICE_NAME=superapp-gateway-eu
+    command: ["python", "gateway/main.py"]
+    volumes:
+      - ./superapp.db:/app/superapp.db
+    depends_on:
+      - backend-eu
+      - jaeger
+
+  nginx-gslb:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - gateway
+      - gateway-eu
 
   zookeeper:
     image: confluentinc/cp-zookeeper:6.2.0
@@ -71,6 +108,14 @@ services:
     depends_on:
       - kafka
 
+  dlq-consumer:
+    build: .
+    command: ["python", "notification_service/dlq_consumer.py"]
+    environment:
+      - KAFKA_BROKER_URL=kafka:9092
+    depends_on:
+      - kafka
+
   jaeger:
     image: jaegertracing/all-in-one:latest
     ports:
@@ -88,6 +133,62 @@ services:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/superapp_overview.json
+    volumes:
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+    depends_on:
+      - prometheus
+
+  reconciliation-worker:
+    build: .
+    command: ["python", "app/scripts/reconciliation_worker.py"]
+    environment:
+      - DATABASE_URL=sqlite:///./superapp.db
+      - PYTHONPATH=./
+    volumes:
+      - ./superapp.db:/app/superapp.db
+      - ./compliance_reports:/app/compliance_reports
+    depends_on:
+      - backend
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: clickhouse
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - ./clickhouse_data:/var/lib/clickhouse
+
+  analytics-consumer:
+    build: .
+    command: ["python", "app/services/analytics_consumer.py"]
+    environment:
+      - KAFKA_BROKER_URL=kafka:9092
+      - CLICKHOUSE_HOST=clickhouse
+      - PYTHONPATH=./
+    depends_on:
+      - kafka
+      - clickhouse
+
+  webhook-dispatcher:
+    build: .
+    command: ["python", "app/scripts/webhook_dispatcher.py"]
+    environment:
+      - KAFKA_BROKER_URL=kafka:9092
+      - PYTHONPATH=./
+    depends_on:
+      - kafka
 
   wallet-mfe:
     build:

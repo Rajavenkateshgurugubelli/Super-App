@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-from kafka import KafkaConsumer
+from kafka import KafkaConsumer, KafkaProducer
 import time
 import sys
 
@@ -36,8 +36,20 @@ def main():
             retries -= 1
 
     if not consumer:
-        logger.error("Could not connect to Kafka. Exiting.")
+        logger.error("Could not connect to Kafka consumer. Exiting.")
         return
+
+    # Initialize DLQ Producer
+    dlq_producer = None
+    try:
+        dlq_producer = KafkaProducer(
+            bootstrap_servers=[kafka_url],
+            value_serializer=lambda x: json.dumps(x).encode('utf-8'),
+            api_version=(0, 10, 1)
+        )
+        logger.info("Connected to DLQ Kafka Producer successfully.")
+    except Exception as e:
+        logger.warning(f"Could not connect DLQ producer: {e}")
 
     logger.info(f"Listening for events on topic: {topic}")
 
@@ -54,6 +66,19 @@ def main():
                 
         except Exception as e:
             logger.error(f"Error processing message: {e}")
+            if dlq_producer:
+                try:
+                    # Enrich payload with error details
+                    dlq_message = {
+                        "original_message": message.value,
+                        "error_reason": str(e),
+                        "failed_at": time.time()
+                    }
+                    dlq_producer.send("transactions-dlq", value=dlq_message)
+                    dlq_producer.flush()
+                    logger.info("Sent failed message to DLQ.")
+                except Exception as dlq_e:
+                    logger.error(f"Failed to send to DLQ: {dlq_e}")
 
 def handle_transaction_event(payload):
     txn_id = payload.get("transaction_id")

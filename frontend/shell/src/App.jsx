@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import UserSignup from './components/UserSignup'
 import Login from './components/Login'
 import AdminPanel from './components/AdminPanel'
+import PasskeyButton from './components/PasskeyButton'
 import './index.css'
 
 const WalletDashboard = lazy(() => import('walletApp/WalletDashboard'))
@@ -143,6 +144,16 @@ const ProfileModal = ({ user, onClose, onUpdated }) => {
             </button>
           </div>
           {msg && <div style={{ fontSize: 12, marginTop: 8, color: msg.type === 'ok' ? '#10b981' : '#ef4444' }}>{msg.text}</div>}
+        </div>
+        {/* Phase 16: Add Passkey */}
+        <div style={{ marginTop: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Security</div>
+          <PasskeyButton
+            mode="register"
+            token={localStorage.getItem('token')}
+            onSuccess={() => setMsg({ type: 'ok', text: '🔑 Passkey registered! You can now sign in without a password.' })}
+            onError={(e) => setMsg({ type: 'err', text: e })}
+          />
         </div>
       </div>
     </div>
@@ -293,6 +304,20 @@ function App() {
           ) : (
             <div style={{ width: '100%', maxWidth: 420 }}>
               <Login onLogin={handleLogin} onSwitchToSignup={() => setView('signup')} />
+              {/* Phase 16: Passkey sign-in */}
+              <div style={{ marginTop: 12, padding: '0 4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
+                  <span style={{ fontSize: 11, color: '#475569', whiteSpace: 'nowrap' }}>or use passkey</span>
+                  <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
+                </div>
+                <PasskeyButton
+                  mode="authenticate"
+                  email=""
+                  onSuccess={({ token: t, user: u }) => handleLogin(u, t)}
+                  onError={(e) => console.warn('Passkey login failed:', e)}
+                />
+              </div>
             </div>
           )
         ) : view === 'admin' ? (

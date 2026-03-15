@@ -55,6 +55,10 @@ class User(Base):
     phone_number = Column(String, unique=True, index=True)
     # Encrypted PII field (e.g. government ID)
     encrypted_pii = Column(String, nullable=True)
+    
+    # Decentralized Identity (W3C DID)
+    did = Column(String, unique=True, index=True, nullable=True)
+    did_document = Column(String, nullable=True) # JSON stored as string for compatibility
 
     wallets = relationship("Wallet", back_populates="owner")
 
@@ -95,3 +99,22 @@ class ConversionRate(Base):
     timestamp = Column(Float)
     
     transaction = relationship("Transaction", back_populates="conversion")
+
+class WebAuthnCredential(Base):
+    """Stores WebAuthn public-key credentials (passkeys) per user."""
+    __tablename__ = "webauthn_credentials"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("users.user_id"), nullable=False, index=True)
+    # Base64url-encoded credential ID assigned by the authenticator
+    credential_id = Column(String, unique=True, nullable=False, index=True)
+    # CBOR-encoded public key (stored as hex string for SQLite compat)
+    public_key = Column(String, nullable=False)
+    # Signature counter for replay-attack detection
+    sign_count = Column(Integer, default=0, nullable=False)
+    # Human-readable label (e.g. "Touch ID on MacBook")
+    label = Column(String, nullable=True)
+    created_at = Column(Float, default=lambda: __import__("time").time(), nullable=False)
+    last_used_at = Column(Float, nullable=True)
+
+    owner = relationship("User", backref="passkeys")

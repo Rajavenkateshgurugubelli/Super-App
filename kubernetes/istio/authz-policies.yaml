@@ -1,0 +1,47 @@
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: default-deny-all
+  namespace: superapp-prod
+spec:
+  # Applying no selector mathematically applies to all pods in the namespace
+  {}
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-gateway-to-wallet
+  namespace: superapp-prod
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: wallet-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            # Only trust connections presenting the Gateway's mTLS SPIFFE ID
+            principals: ["cluster.local/ns/superapp-prod/sa/gateway-sa"]
+      to:
+        - operation:
+            methods: ["POST"]
+            paths: ["/wallet.WalletService/*"]
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-gateway-to-user
+  namespace: superapp-prod
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: user-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: ["cluster.local/ns/superapp-prod/sa/gateway-sa"]
+      to:
+        - operation:
+            methods: ["POST"]
+            paths: ["/user.UserService/*"]

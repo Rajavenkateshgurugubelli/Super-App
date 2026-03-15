@@ -1,0 +1,10 @@
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: superapp-prod
+spec:
+  # Enforce STRICT mutual TLS (mTLS) across the entire production namespace.
+  # This rejects any plaintext traffic or traffic from pods without a valid Istio certificate.
+  mtls:
+    mode: STRICT

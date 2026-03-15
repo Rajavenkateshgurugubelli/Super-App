@@ -43,13 +43,13 @@
 **7.2 Event Producers & Consumers**
 - [x] WalletService emits `TransactionInitiated` / `TransactionCompleted` events
 - [x] NotificationService consumes Kafka events
-- [ ] Dead Letter Queues (DLQ) for failed transaction events
+- [x] Dead Letter Queues (DLQ) — retry (max 3×) + permanent dead-letter JSONL store + `GET /api/admin/dlq/stats`
 
-### Phase 8: Edge Caching & High-Speed State ✅ (Partially complete)
+### Phase 8: Edge Caching & High-Speed State ✅
 **8.1 Redis Integration**
 - [x] Redis deployed and connected in WalletService
 - [x] Write-through cache for wallet balances (60s TTL)
-- [ ] Cache for Policy/Compliance rules
+- [x] Cache for FX rates (5 min TTL) + `/api/policies` endpoint (10 min TTL)
 **8.2 Distributed Locking**
 - [x] Redis Redlock for double-spend prevention on TransferFunds
 
@@ -60,7 +60,7 @@
 **9.2 Monitoring Stack**
 - [x] Jaeger deployed (traces at :16686)
 - [x] Prometheus deployed (metrics at :9090)
-- [ ] Grafana dashboard
+- [x] Grafana dashboard provisioned (request rate, p95 latency, 5xx rate, volume by endpoint)
 
 ### Phase 10: Infrastructure as Code (IaC) ✅ (Partially complete)
 **10.1 Cloud Provisioning**
@@ -78,11 +78,12 @@
 - [x] WalletDashboard extracted as Remote/Mini-App
 - [x] Shared React/ReactDOM via federation
 
-### Phase 12: Shared Ecosystem Resources ⚙️ (In Progress)
+### Phase 12: Shared Ecosystem Resources ✅
 **12.1 Universal Component Library**
-- [x] `shared-ui` package with Button component (vendored for Docker)
-- [ ] Storybook documentation
-- [ ] Full design system (Input, Modal, Card, Badge)
+- [x] `shared-ui` package with Button, Card, Input, Modal components
+- [x] Badge (status + currency variants with animated dot), Spinner, Toast components
+- [x] Storybook v8 documentation with stories for all 7 components
+- [x] Full design system published as ES + UMD dist
 
 ### Phase 13: Mobile Super App Container (Planned)
 - [ ] React Native / Expo initialization
@@ -97,25 +98,29 @@
 
 ## Milestone 3: Advanced Security & Sovereignty (Phases 15–18)
 
-### Phase 15: Zero-Trust Service Mesh (Planned)
-- [ ] Istio / Linkerd sidecar injection
-- [ ] mTLS between UserService and WalletService
-- [ ] Network policies (deny-by-default)
+### Phase 15: Zero-Trust Service Mesh ✅
+- [x] mTLS between backend gRPC server and gateway (`app/security/tls.py`)
+- [x] Self-signed CA + server/client cert generation (`scripts/gen_certs.sh`)
+- [x] Docker network isolation: `backend-net` (internal) / `frontend-net`
+- [x] `GRPC_TLS=true` env flag for opt-in TLS with graceful fallback
 
-### Phase 16: Biometric & Passwordless Auth (Planned)
-- [ ] WebAuthn / Passkeys
-- [ ] Public key credential storage
-- [ ] JWT issuance via cryptographic signatures
+### Phase 16: Biometric & Passwordless Auth ✅
+- [x] WebAuthn / Passkeys (`py_webauthn`)
+- [x] `webauthn_credentials` table + Alembic migration
+- [x] Registration flow: `POST /api/auth/webauthn/register/begin` + `/complete`
+- [x] Authentication flow: `POST /api/auth/webauthn/login/begin` + `/complete` → issues JWT
+- [x] `PasskeyButton.jsx` frontend component (register + authenticate modes)
+- [x] "Add Passkey" in ProfileModal; "Sign in with Passkey" on login screen
 
 ### Phase 17: Cross-Border Data Residency (Planned)
 - [ ] Geo-Routing Engine (EU → EU node, IN → IN node)
 - [ ] PII masking for cross-border admin queries
 
-### Phase 18: Advanced API Security ✅ (Partially complete)
+### Phase 18: Advanced API Security ✅
 **18.1 Rate Limiting**
 - [x] Redis sliding-window rate limiting (120 req/min per IP, configurable)
 - [x] 429 responses with `Retry-After` header
-- [ ] WAF (SQL injection / XSS blocking)
+- [x] WAF (SQL injection / XSS blocking + HMAC signature verification)
 
 ---
 

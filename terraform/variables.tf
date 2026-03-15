@@ -1,25 +1,29 @@
-variable "project_id" {
-  description = "The Google Cloud Project ID"
+variable "aws_region" {
+  description = "AWS Region for deployment"
   type        = string
+  default     = "us-east-1"
 }
 
-variable "region" {
-  description = "GCP Region (e.g., us-central1)"
+variable "environment" {
+  description = "Target environment (e.g., dev, staging, prod)"
   type        = string
-  default     = "us-central1"
+  default     = "dev"
 }
 
-variable "backend_image" {
-  description = "Docker image for Backend Service"
-  type        = string
+variable "eks_node_min_size" {
+  description = "Minimum number of nodes in EKS managed node group"
+  type        = number
+  default     = 2
 }
 
-variable "gateway_image" {
-  description = "Docker image for Gateway Service"
-  type        = string
+variable "eks_node_max_size" {
+  description = "Maximum number of nodes in EKS managed node group"
+  type        = number
+  default     = 4
 }
 
-variable "frontend_image" {
-  description = "Docker image for Frontend Service"
-  type        = string
+variable "eks_node_desired_size" {
+  description = "Desired number of nodes in EKS managed node group"
+  type        = number
+  default     = 2
 }
