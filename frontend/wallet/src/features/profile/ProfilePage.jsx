@@ -1,5 +1,6 @@
 import React from 'react';
-import { Input, Button } from 'shared-ui';
+import Input from '../../components/Input';
+import Button from '../../components/Button';
 
 const ProfilePage = () => {
   return (
