@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
 const Login = ({ onLogin, onSwitchToSignup }) => {
-    const [formData, setFormData] = useState({ email: '', password: '' });
+    const [formData, setFormData] = useState({ email: '', password: '', region: 3 });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
@@ -13,7 +13,10 @@ const Login = ({ onLogin, onSwitchToSignup }) => {
             const response = await fetch('/api/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData),
+                body: JSON.stringify({
+                    ...formData,
+                    region: parseInt(formData.region)
+                }),
             });
             const data = await response.json();
             if (!response.ok) throw new Error(data.detail || 'Login failed');
@@ -68,6 +71,20 @@ const Login = ({ onLogin, onSwitchToSignup }) => {
                             required
                             placeholder="you@example.com"
                         />
+                    </div>
+                    <div>
+                        <label className="field-label">Region</label>
+                        <select
+                            className="input-field"
+                            value={formData.region}
+                            onChange={(e) => setFormData({ ...formData, region: e.target.value })}
+                            required
+                            style={{ appearance: 'auto' }}
+                        >
+                            <option value={3}>USA 🇺🇸 (US-EAST-1)</option>
+                            <option value={1}>India 🇮🇳 (IN-WEST-1)</option>
+                            <option value={2}>Europe 🇪🇺 (EU-CENTRAL-1)</option>
+                        </select>
                     </div>
                     <div>
                         <label className="field-label">Password</label>

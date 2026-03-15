@@ -17,8 +17,8 @@ function useNotifications(user, token, showToast) {
     if (wsRef.current?.readyState === WebSocket.OPEN) return
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.host
-    const url = `${protocol}//${host}/ws/${user.user_id}?token=${token}`
+    const gatewayHost = 'localhost:8000'
+    const url = `${protocol}//${gatewayHost}/ws/${user.user_id}?token=${token}`
 
     try {
       const ws = new WebSocket(url)

@@ -110,10 +110,9 @@ class WafMiddleware:
         # 3. HMAC Signature Verification (if it's a mutating request)
         if req.method in ["POST", "PUT", "PATCH"] and body_bytes:
             client_sig = req.headers.get("X-Signature")
-            # Temporarily disabled for residency verification
-            # if not client_sig:
-            #     from fastapi.responses import JSONResponse
-            #     return await JSONResponse(status_code=403, content={"detail": "Missing X-Signature header for payload integrity."})(scope, receive, send)
+            if not client_sig:
+                from fastapi.responses import JSONResponse
+                return await JSONResponse(status_code=403, content={"detail": "Missing X-Signature header for payload integrity."})(scope, receive, send)
             
             # Recompute signature
             expected_sig = hmac.new(
@@ -122,10 +121,9 @@ class WafMiddleware:
                 hashlib.sha256
             ).hexdigest()
 
-            # Time-constant compare
-            # if not hmac.compare_digest(client_sig, expected_sig):
-            #     from fastapi.responses import JSONResponse
-            #     return await JSONResponse(status_code=403, content={"detail": "Payload signature mismatch. Tampering detected."})(scope, receive, send)
+            if not hmac.compare_digest(client_sig, expected_sig):
+                from fastapi.responses import JSONResponse
+                return await JSONResponse(status_code=403, content={"detail": "Payload signature mismatch. Tampering detected."})(scope, receive, send)
 
         # Re-emit the read body for the actual handler
         async def receive_re_emit() -> Message:
@@ -491,15 +489,33 @@ def create_wallet(req: WalletRequest, token_data: dict = Depends(get_token_data)
         raise HTTPException(status_code=500, detail=e.details())
 
 @app.get("/api/wallets")
-def list_wallets(token_data: dict = Depends(get_token_data)):
+async def list_wallets(token_data: dict = Depends(get_token_data)):
     user_id = token_data["user_id"]
-    region = token_data.get("region", 0)
-    try:
-        _, wallet_stub = get_regional_stubs(region)
-        resp = wallet_stub.ListWallets(wallet_pb2.ListWalletsRequest(user_id=user_id))
-        return {"wallets": [{"wallet_id": w.wallet_id, "currency": w.currency, "balance": w.balance, "user_id": w.user_id} for w in resp.wallets]}
-    except grpc.RpcError as e:
-        raise HTTPException(status_code=500, detail=e.details())
+    # Aggregate wallets from all regions to show "Global Net Worth"
+    all_wallets = []
+    
+    # We run these in parallel for performance
+    async def fetch_region_wallets(region_id):
+        try:
+            # We need to bridge sync gRPC to async for efficient parallelization in FastAPI
+            loop = asyncio.get_event_loop()
+            _, wallet_stub = get_regional_stubs(region_id)
+            
+            # Use run_in_executor for the blocking gRPC call
+            resp = await loop.run_in_executor(
+                None, 
+                lambda: wallet_stub.ListWallets(wallet_pb2.ListWalletsRequest(user_id=user_id))
+            )
+            return [{"wallet_id": w.wallet_id, "currency": w.currency, "balance": w.balance, "user_id": w.user_id, "region": region_id} for w in resp.wallets]
+        except Exception as e:
+            print(f"Failed to fetch wallets for region {region_id}: {e}")
+            return []
+
+    results = await asyncio.gather(*(fetch_region_wallets(r) for r in REGIONAL_HOSTS.keys()))
+    for region_wallets in results:
+        all_wallets.extend(region_wallets)
+        
+    return {"wallets": all_wallets, "total_count": len(all_wallets)}
 
 @app.get("/api/wallets/{wallet_id}/balance")
 def get_balance(wallet_id: str, token_data: dict = Depends(get_token_data)):
@@ -670,15 +686,21 @@ def admin_stats(token_data: dict = Depends(get_token_data)):
         raise HTTPException(status_code=500, detail=e.details())
 
 @app.get("/api/admin/users")
-def admin_list_users(token_data: dict = Depends(get_token_data), limit: int = 50, offset: int = 0):
+def admin_list_users(
+    token_data: dict = Depends(get_token_data), 
+    limit: int = 50, 
+    offset: int = 0,
+    target_region: int = None
+):
     user_id = token_data["user_id"]
-    admin_region = token_data.get("region", 0)
+    admin_region = token_data.get("region", 1)  # Default to US
     user = _get_user_via_grpc(user_id, admin_region)
     if not user or not user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    # Target region for listing (defaults to admin's region)
-    target_region = admin_region 
+    # Target region for listing (defaults to admin's region if not provided)
+    if target_region is None:
+        target_region = admin_region
     
     try:
         user_stub, _ = get_regional_stubs(target_region)
