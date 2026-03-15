@@ -65,7 +65,9 @@ services:
       - GRPC_HOST_IN=backend-in:50051
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
       - OTEL_SERVICE_NAME=superapp-gateway
-    command: ["python", "gateway/main.py"]
+    volumes:
+      - .:/app
+    entrypoint: ["python", "gateway/main.py"]
     depends_on:
       - backend-us
       - backend-eu
