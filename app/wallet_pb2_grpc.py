@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-from app import wallet_pb2 as wallet__pb2
+import wallet_pb2 as wallet__pb2
 
 GRPC_GENERATED_VERSION = '1.78.0'
 GRPC_VERSION = grpc.__version__
@@ -59,6 +59,11 @@ class WalletServiceStub(object):
                 request_serializer=wallet__pb2.GetConversionHistoryRequest.SerializeToString,
                 response_deserializer=wallet__pb2.GetConversionHistoryResponse.FromString,
                 _registered_method=True)
+        self.ListWallets = channel.unary_unary(
+                '/wallet.WalletService/ListWallets',
+                request_serializer=wallet__pb2.ListWalletsRequest.SerializeToString,
+                response_deserializer=wallet__pb2.ListWalletsResponse.FromString,
+                _registered_method=True)
 
 
 class WalletServiceServicer(object):
@@ -94,6 +99,12 @@ class WalletServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ListWallets(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_WalletServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -121,6 +132,11 @@ def add_WalletServiceServicer_to_server(servicer, server):
                     servicer.GetConversionHistory,
                     request_deserializer=wallet__pb2.GetConversionHistoryRequest.FromString,
                     response_serializer=wallet__pb2.GetConversionHistoryResponse.SerializeToString,
+            ),
+            'ListWallets': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListWallets,
+                    request_deserializer=wallet__pb2.ListWalletsRequest.FromString,
+                    response_serializer=wallet__pb2.ListWalletsResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -258,6 +274,33 @@ class WalletService(object):
             '/wallet.WalletService/GetConversionHistory',
             wallet__pb2.GetConversionHistoryRequest.SerializeToString,
             wallet__pb2.GetConversionHistoryResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListWallets(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/wallet.WalletService/ListWallets',
+            wallet__pb2.ListWalletsRequest.SerializeToString,
+            wallet__pb2.ListWalletsResponse.FromString,
             options,
             channel_credentials,
             insecure,

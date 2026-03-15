@@ -1,20 +1,19 @@
 
 
 services:
-  backend:
+  backend-us:
     build: .
     ports:
       - "50051:50051"
     environment:
-      - DATABASE_URL=sqlite:///./superapp.db
+      - DATABASE_URL=sqlite:///./data/superapp.db
       - KAFKA_BROKER_URL=kafka:9092
-      - REDIS_URL=redis://redis:6379/0
+      - REDIS_URL=redis:6379/0
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
       - OTEL_SERVICE_NAME=superapp-backend-us
-      - OTEL_METRICS_EXPORTER=prometheus # or none if we use explicit metric server
-      - PROM_PORT=9464 # Custom
+      - REGION=US
     volumes:
-      - ./superapp.db:/app/superapp.db
+      - ./data/us:/app/data
     depends_on:
       - kafka
       - redis
@@ -23,16 +22,34 @@ services:
   backend-eu:
     build: .
     ports:
-      - "50052:50051" # Maps to internal 50051
+      - "50052:50051"
     environment:
-      - DATABASE_URL=sqlite:///./superapp.db
+      - DATABASE_URL=sqlite:///./data/superapp.db
       - KAFKA_BROKER_URL=kafka:9092
-      - REDIS_URL=redis://redis:6379/0
+      - REDIS_URL=redis:6379/0
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
       - OTEL_SERVICE_NAME=superapp-backend-eu
-      - OTEL_METRICS_EXPORTER=prometheus
+      - REGION=EU
     volumes:
-      - ./superapp.db:/app/superapp.db
+      - ./data/eu:/app/data
+    depends_on:
+      - kafka
+      - redis
+      - jaeger
+
+  backend-in:
+    build: .
+    ports:
+      - "50053:50051"
+    environment:
+      - DATABASE_URL=sqlite:///./data/superapp.db
+      - KAFKA_BROKER_URL=kafka:9092
+      - REDIS_URL=redis:6379/0
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - OTEL_SERVICE_NAME=superapp-backend-in
+      - REGION=INDIA
+    volumes:
+      - ./data/in:/app/data
     depends_on:
       - kafka
       - redis
@@ -43,29 +60,16 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - GRPC_HOST=backend:50051
+      - GRPC_HOST_US=backend-us:50051
+      - GRPC_HOST_EU=backend-eu:50051
+      - GRPC_HOST_IN=backend-in:50051
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
-      - OTEL_SERVICE_NAME=superapp-gateway-us
+      - OTEL_SERVICE_NAME=superapp-gateway
     command: ["python", "gateway/main.py"]
-    volumes:
-      - ./superapp.db:/app/superapp.db
     depends_on:
-      - backend
-      - jaeger
-
-  gateway-eu:
-    build: .
-    ports:
-      - "8001:8000"
-    environment:
-      - GRPC_HOST=backend-eu:50051
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
-      - OTEL_SERVICE_NAME=superapp-gateway-eu
-    command: ["python", "gateway/main.py"]
-    volumes:
-      - ./superapp.db:/app/superapp.db
-    depends_on:
+      - backend-us
       - backend-eu
+      - backend-in
       - jaeger
 
   nginx-gslb:
@@ -76,7 +80,13 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - gateway
-      - gateway-eu
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
 
   zookeeper:
     image: confluentinc/cp-zookeeper:6.2.0
@@ -159,7 +169,7 @@ services:
       - ./superapp.db:/app/superapp.db
       - ./compliance_reports:/app/compliance_reports
     depends_on:
-      - backend
+      - backend-us
 
   clickhouse:
     image: clickhouse/clickhouse-server:latest

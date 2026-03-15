@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-from app import user_pb2 as protos_dot_user__pb2
+import user_pb2 as user__pb2
 
 GRPC_GENERATED_VERSION = '1.78.0'
 GRPC_VERSION = grpc.__version__
@@ -18,7 +18,7 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + ' but the generated code in protos/user_pb2_grpc.py depends on'
+        + ' but the generated code in user_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
@@ -36,23 +36,53 @@ class UserServiceStub(object):
         """
         self.CreateUser = channel.unary_unary(
                 '/user.UserService/CreateUser',
-                request_serializer=protos_dot_user__pb2.CreateUserRequest.SerializeToString,
-                response_deserializer=protos_dot_user__pb2.CreateUserResponse.FromString,
+                request_serializer=user__pb2.CreateUserRequest.SerializeToString,
+                response_deserializer=user__pb2.CreateUserResponse.FromString,
                 _registered_method=True)
         self.Login = channel.unary_unary(
                 '/user.UserService/Login',
-                request_serializer=protos_dot_user__pb2.LoginRequest.SerializeToString,
-                response_deserializer=protos_dot_user__pb2.LoginResponse.FromString,
+                request_serializer=user__pb2.LoginRequest.SerializeToString,
+                response_deserializer=user__pb2.LoginResponse.FromString,
                 _registered_method=True)
         self.GetUser = channel.unary_unary(
                 '/user.UserService/GetUser',
-                request_serializer=protos_dot_user__pb2.GetUserRequest.SerializeToString,
-                response_deserializer=protos_dot_user__pb2.GetUserResponse.FromString,
+                request_serializer=user__pb2.GetUserRequest.SerializeToString,
+                response_deserializer=user__pb2.GetUserResponse.FromString,
                 _registered_method=True)
         self.UpdateProfile = channel.unary_unary(
                 '/user.UserService/UpdateProfile',
-                request_serializer=protos_dot_user__pb2.UpdateProfileRequest.SerializeToString,
-                response_deserializer=protos_dot_user__pb2.UpdateProfileResponse.FromString,
+                request_serializer=user__pb2.UpdateProfileRequest.SerializeToString,
+                response_deserializer=user__pb2.UpdateProfileResponse.FromString,
+                _registered_method=True)
+        self.GetStats = channel.unary_unary(
+                '/user.UserService/GetStats',
+                request_serializer=user__pb2.GetStatsRequest.SerializeToString,
+                response_deserializer=user__pb2.GetStatsResponse.FromString,
+                _registered_method=True)
+        self.ListUsers = channel.unary_unary(
+                '/user.UserService/ListUsers',
+                request_serializer=user__pb2.ListUsersRequest.SerializeToString,
+                response_deserializer=user__pb2.ListUsersResponse.FromString,
+                _registered_method=True)
+        self.WebAuthnRegisterBegin = channel.unary_unary(
+                '/user.UserService/WebAuthnRegisterBegin',
+                request_serializer=user__pb2.WebAuthnRegisterBeginRequest.SerializeToString,
+                response_deserializer=user__pb2.WebAuthnOptionsResponse.FromString,
+                _registered_method=True)
+        self.WebAuthnRegisterComplete = channel.unary_unary(
+                '/user.UserService/WebAuthnRegisterComplete',
+                request_serializer=user__pb2.WebAuthnRegisterCompleteRequest.SerializeToString,
+                response_deserializer=user__pb2.WebAuthnRegisterCompleteResponse.FromString,
+                _registered_method=True)
+        self.WebAuthnLoginBegin = channel.unary_unary(
+                '/user.UserService/WebAuthnLoginBegin',
+                request_serializer=user__pb2.WebAuthnLoginBeginRequest.SerializeToString,
+                response_deserializer=user__pb2.WebAuthnOptionsResponse.FromString,
+                _registered_method=True)
+        self.WebAuthnLoginComplete = channel.unary_unary(
+                '/user.UserService/WebAuthnLoginComplete',
+                request_serializer=user__pb2.WebAuthnLoginCompleteRequest.SerializeToString,
+                response_deserializer=user__pb2.WebAuthnLoginCompleteResponse.FromString,
                 _registered_method=True)
 
 
@@ -83,28 +113,95 @@ class UserServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetStats(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListUsers(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def WebAuthnRegisterBegin(self, request, context):
+        """WebAuthn
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def WebAuthnRegisterComplete(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def WebAuthnLoginBegin(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def WebAuthnLoginComplete(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_UserServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'CreateUser': grpc.unary_unary_rpc_method_handler(
                     servicer.CreateUser,
-                    request_deserializer=protos_dot_user__pb2.CreateUserRequest.FromString,
-                    response_serializer=protos_dot_user__pb2.CreateUserResponse.SerializeToString,
+                    request_deserializer=user__pb2.CreateUserRequest.FromString,
+                    response_serializer=user__pb2.CreateUserResponse.SerializeToString,
             ),
             'Login': grpc.unary_unary_rpc_method_handler(
                     servicer.Login,
-                    request_deserializer=protos_dot_user__pb2.LoginRequest.FromString,
-                    response_serializer=protos_dot_user__pb2.LoginResponse.SerializeToString,
+                    request_deserializer=user__pb2.LoginRequest.FromString,
+                    response_serializer=user__pb2.LoginResponse.SerializeToString,
             ),
             'GetUser': grpc.unary_unary_rpc_method_handler(
                     servicer.GetUser,
-                    request_deserializer=protos_dot_user__pb2.GetUserRequest.FromString,
-                    response_serializer=protos_dot_user__pb2.GetUserResponse.SerializeToString,
+                    request_deserializer=user__pb2.GetUserRequest.FromString,
+                    response_serializer=user__pb2.GetUserResponse.SerializeToString,
             ),
             'UpdateProfile': grpc.unary_unary_rpc_method_handler(
                     servicer.UpdateProfile,
-                    request_deserializer=protos_dot_user__pb2.UpdateProfileRequest.FromString,
-                    response_serializer=protos_dot_user__pb2.UpdateProfileResponse.SerializeToString,
+                    request_deserializer=user__pb2.UpdateProfileRequest.FromString,
+                    response_serializer=user__pb2.UpdateProfileResponse.SerializeToString,
+            ),
+            'GetStats': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetStats,
+                    request_deserializer=user__pb2.GetStatsRequest.FromString,
+                    response_serializer=user__pb2.GetStatsResponse.SerializeToString,
+            ),
+            'ListUsers': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListUsers,
+                    request_deserializer=user__pb2.ListUsersRequest.FromString,
+                    response_serializer=user__pb2.ListUsersResponse.SerializeToString,
+            ),
+            'WebAuthnRegisterBegin': grpc.unary_unary_rpc_method_handler(
+                    servicer.WebAuthnRegisterBegin,
+                    request_deserializer=user__pb2.WebAuthnRegisterBeginRequest.FromString,
+                    response_serializer=user__pb2.WebAuthnOptionsResponse.SerializeToString,
+            ),
+            'WebAuthnRegisterComplete': grpc.unary_unary_rpc_method_handler(
+                    servicer.WebAuthnRegisterComplete,
+                    request_deserializer=user__pb2.WebAuthnRegisterCompleteRequest.FromString,
+                    response_serializer=user__pb2.WebAuthnRegisterCompleteResponse.SerializeToString,
+            ),
+            'WebAuthnLoginBegin': grpc.unary_unary_rpc_method_handler(
+                    servicer.WebAuthnLoginBegin,
+                    request_deserializer=user__pb2.WebAuthnLoginBeginRequest.FromString,
+                    response_serializer=user__pb2.WebAuthnOptionsResponse.SerializeToString,
+            ),
+            'WebAuthnLoginComplete': grpc.unary_unary_rpc_method_handler(
+                    servicer.WebAuthnLoginComplete,
+                    request_deserializer=user__pb2.WebAuthnLoginCompleteRequest.FromString,
+                    response_serializer=user__pb2.WebAuthnLoginCompleteResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -132,8 +229,8 @@ class UserService(object):
             request,
             target,
             '/user.UserService/CreateUser',
-            protos_dot_user__pb2.CreateUserRequest.SerializeToString,
-            protos_dot_user__pb2.CreateUserResponse.FromString,
+            user__pb2.CreateUserRequest.SerializeToString,
+            user__pb2.CreateUserResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -159,8 +256,8 @@ class UserService(object):
             request,
             target,
             '/user.UserService/Login',
-            protos_dot_user__pb2.LoginRequest.SerializeToString,
-            protos_dot_user__pb2.LoginResponse.FromString,
+            user__pb2.LoginRequest.SerializeToString,
+            user__pb2.LoginResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -186,8 +283,8 @@ class UserService(object):
             request,
             target,
             '/user.UserService/GetUser',
-            protos_dot_user__pb2.GetUserRequest.SerializeToString,
-            protos_dot_user__pb2.GetUserResponse.FromString,
+            user__pb2.GetUserRequest.SerializeToString,
+            user__pb2.GetUserResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -213,8 +310,170 @@ class UserService(object):
             request,
             target,
             '/user.UserService/UpdateProfile',
-            protos_dot_user__pb2.UpdateProfileRequest.SerializeToString,
-            protos_dot_user__pb2.UpdateProfileResponse.FromString,
+            user__pb2.UpdateProfileRequest.SerializeToString,
+            user__pb2.UpdateProfileResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetStats(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/user.UserService/GetStats',
+            user__pb2.GetStatsRequest.SerializeToString,
+            user__pb2.GetStatsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListUsers(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/user.UserService/ListUsers',
+            user__pb2.ListUsersRequest.SerializeToString,
+            user__pb2.ListUsersResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def WebAuthnRegisterBegin(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/user.UserService/WebAuthnRegisterBegin',
+            user__pb2.WebAuthnRegisterBeginRequest.SerializeToString,
+            user__pb2.WebAuthnOptionsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def WebAuthnRegisterComplete(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/user.UserService/WebAuthnRegisterComplete',
+            user__pb2.WebAuthnRegisterCompleteRequest.SerializeToString,
+            user__pb2.WebAuthnRegisterCompleteResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def WebAuthnLoginBegin(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/user.UserService/WebAuthnLoginBegin',
+            user__pb2.WebAuthnLoginBeginRequest.SerializeToString,
+            user__pb2.WebAuthnOptionsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def WebAuthnLoginComplete(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/user.UserService/WebAuthnLoginComplete',
+            user__pb2.WebAuthnLoginCompleteRequest.SerializeToString,
+            user__pb2.WebAuthnLoginCompleteResponse.FromString,
             options,
             channel_credentials,
             insecure,

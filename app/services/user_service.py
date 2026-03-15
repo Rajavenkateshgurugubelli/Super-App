@@ -2,9 +2,10 @@ import logging
 import uuid
 import json
 import grpc
+from sqlalchemy import func
 from app import user_pb2, user_pb2_grpc
 from app.database import SessionLocal
-from app.models import User
+from app.models import User, Wallet, Transaction
 from app import models
 from app.security import get_password_hash, verify_password, create_access_token
 
@@ -80,7 +81,7 @@ class UserService(user_pb2_grpc.UserServiceServicer):
                  context.set_details('Invalid credentials')
                  return user_pb2.LoginResponse()
 
-            token = create_access_token({"sub": user.email, "user_id": user.user_id})
+            token = create_access_token({"sub": user.email, "user_id": user.user_id, "region": user.region.value})
             
             return user_pb2.LoginResponse(
                 token=token,
@@ -118,11 +119,106 @@ class UserService(user_pb2_grpc.UserServiceServicer):
         finally:
             session.close()
 
+    def GetStats(self, request, context):
+        self._logger.info("Retrieving regional statistics")
+        session = SessionLocal()
+        try:
+            total_users = session.query(User).count()
+            total_wallets = session.query(Wallet).count()
+            total_transactions = session.query(Transaction).count()
+            total_volume = session.query(func.sum(Transaction.amount)).scalar() or 0.0
+            
+            return user_pb2.GetStatsResponse(
+                total_users=total_users,
+                total_wallets=total_wallets,
+                total_transactions=total_transactions,
+                total_volume=total_volume
+            )
+        finally:
+            session.close()
+
+    # WebAuthn gRPC Handlers
+    def WebAuthnRegisterBegin(self, request, context):
+        from app.services.webauthn_service import begin_registration
+        session = SessionLocal()
+        try:
+            user = session.query(User).filter(User.user_id == request.user_id).first()
+            if not user:
+                context.set_code(grpc.StatusCode.NOT_FOUND)
+                return user_pb2.WebAuthnOptionsResponse()
+            options = begin_registration(user_id=user.user_id, user_name=user.email, user_display_name=user.name)
+            return user_pb2.WebAuthnOptionsResponse(options_json=json.dumps(options))
+        finally:
+            session.close()
+
+    def WebAuthnRegisterComplete(self, request, context):
+        from app.services.webauthn_service import complete_registration
+        try:
+            cred = complete_registration(
+                user_id=request.user_id,
+                credential_json=json.loads(request.credential_json),
+                label=request.label
+            )
+            return user_pb2.WebAuthnRegisterCompleteResponse(
+                success=True,
+                credential_id=cred.credential_id,
+                label=cred.label
+            )
+        except Exception as e:
+            return user_pb2.WebAuthnRegisterCompleteResponse(success=False)
+
+    def WebAuthnLoginBegin(self, request, context):
+        from app.services.webauthn_service import begin_authentication
+        session = SessionLocal()
+        try:
+            user = session.query(User).filter(User.email == request.email).first()
+            user_id = user.user_id if user else None
+            options = begin_authentication(user_id=user_id)
+            return user_pb2.WebAuthnOptionsResponse(options_json=json.dumps(options))
+        finally:
+            session.close()
+
+    def WebAuthnLoginComplete(self, request, context):
+        from app.services.webauthn_service import complete_authentication
+        session = SessionLocal()
+        try:
+            user_id = complete_authentication(assertion_json=json.loads(request.assertion_json))
+            user = session.query(User).filter(User.user_id == user_id).first()
+            if not user:
+                 context.set_code(grpc.StatusCode.NOT_FOUND)
+                 return user_pb2.WebAuthnLoginCompleteResponse()
+                 
+            token = create_access_token({"sub": user.email, "user_id": user.user_id, "region": user.region.value})
+            return user_pb2.WebAuthnLoginCompleteResponse(
+                token=token,
+                user=self._map_user_to_proto(user)
+            )
+        except Exception:
+            context.set_code(grpc.StatusCode.UNAUTHENTICATED)
+            return user_pb2.WebAuthnLoginCompleteResponse()
+        finally:
+            session.close()
+
+    def ListUsers(self, request, context):
+        self._logger.info(f"Listing users with limit={request.limit}, offset={request.offset}")
+        session = SessionLocal()
+        try:
+            users = session.query(User).offset(request.offset).limit(request.limit).all()
+            total = session.query(User).count()
+            return user_pb2.ListUsersResponse(
+                users=[self._map_user_to_proto(u) for u in users],
+                total=total
+            )
+        finally:
+            session.close()
+
     def _map_user_to_proto(self, user_model):
         return user_pb2.User(
             user_id=user_model.user_id,
             email=user_model.email,
             name=user_model.name,
             region=user_model.region.value,
-            kyc_status=user_model.kyc_status.value
+            kyc_status=user_model.kyc_status.value,
+            phone_number=user_model.phone_number or "",
+            is_admin=bool(user_model.is_admin)
         )
