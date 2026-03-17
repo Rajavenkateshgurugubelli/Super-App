@@ -14,6 +14,8 @@ import redis.asyncio as aioredis
 import re
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+from fastapi.responses import Response
 
 # ── Path setup ─────────────────────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -352,6 +354,10 @@ class ExecuteNLRequest(BaseModel):
 @app.get("/health")
 def health():
     return {"status": "ok", "version": "3.0.0", "rate_limit_rpm": RATE_LIMIT}
+
+@app.get("/metrics")
+def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 # ── Auth endpoints ─────────────────────────────────────────────────────────────
 @app.post("/api/users", status_code=201)

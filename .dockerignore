@@ -10,3 +10,7 @@ protoc-29.3-win64
 *.log
 web/node_modules
 web/dist
+clickhouse_data
+data
+compliance_reports
+*.db

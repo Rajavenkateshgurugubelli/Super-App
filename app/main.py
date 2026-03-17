@@ -3,6 +3,7 @@ import grpc
 from concurrent import futures
 import sys
 import os
+from prometheus_client import start_http_server
 
 # Add app directory AND parent directory to sys.path
 # Parent dir: needed for 'from app import ...'
@@ -84,6 +85,14 @@ def serve():
     else:
         server.add_insecure_port(port)
         logger.info(f"Server starting (insecure) on {port}")
+
+    # Start Prometheus metrics server on port 9464
+    try:
+        start_http_server(9464)
+        logger.info("Prometheus metrics server started on port 9464")
+    except Exception as e:
+        logger.error(f"Failed to start Prometheus metrics server: {e}")
+
     server.start()
     server.wait_for_termination()
 

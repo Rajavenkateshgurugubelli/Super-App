@@ -5,8 +5,6 @@ import AdminPanel from './components/AdminPanel'
 import PasskeyButton from './components/PasskeyButton'
 import './index.css'
 
-const WalletDashboard = lazy(() => import('walletApp/WalletDashboard'))
-
 /* ── WebSocket hook ─────────────────────────────────────────────────────────── */
 function useNotifications(user, token, showToast) {
   const wsRef = useRef(null)
@@ -28,7 +26,7 @@ function useNotifications(user, token, showToast) {
         try {
           const data = JSON.parse(e.data)
           if (data.event === 'transfer_received') {
-            showToast(`💸 Received ${data.amount?.toFixed(2)} ${data.currency}! Check your balance.`, 'success')
+            showToast(`Received ${data.amount?.toFixed(2)} ${data.currency}!`, 'success')
           }
         } catch { }
       }
@@ -36,7 +34,6 @@ function useNotifications(user, token, showToast) {
       ws.onerror = () => { }
       ws.onclose = () => {
         wsRef.current = null
-        // Reconnect after 5s
         retryRef.current = setTimeout(connect, 5000)
       }
     } catch (e) {
@@ -46,7 +43,7 @@ function useNotifications(user, token, showToast) {
 
   useEffect(() => {
     if (user && token) {
-      setTimeout(connect, 500) // Small delay after login
+      setTimeout(connect, 500)
     }
     return () => {
       clearTimeout(retryRef.current)
@@ -56,26 +53,15 @@ function useNotifications(user, token, showToast) {
 }
 
 /* ── Global toast state ─────────────────────────────────────────────────────── */
-let _globalToast = null
 const Toast = ({ toast }) => toast ? (
-  <div style={{
-    position: 'fixed', top: 80, right: 24, zIndex: 9999,
-    padding: '12px 20px', borderRadius: 12, fontSize: 13, fontWeight: 600,
-    background: toast.type === 'success' ? 'rgba(16,185,129,0.95)' : 'rgba(239,68,68,0.95)',
-    color: 'white', backdropFilter: 'blur(12px)',
-    boxShadow: '0 8px 32px rgba(0,0,0,0.45)',
-    animation: 'fadeInRight .3s ease', maxWidth: 340, pointerEvents: 'none'
-  }}
-    style2={{ '@keyframes fadeInRight': 'from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:translateX(0)}' }}>
-    <style>{`@keyframes fadeInRight{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:translateX(0)}}`}</style>
+  <div className={`fixed top-24 right-6 z-[9999] px-6 py-4 rounded-2xl text-sm font-bold text-white shadow-2xl backdrop-blur-xl animate-premium-in ${toast.type === 'success' ? 'bg-emerald-500/90' : 'bg-rose-500/90'}`}>
     {toast.msg}
   </div>
 ) : null
 
-/* ── Profile mini-view (shown as a sheet) ─────────────────────────────────── */
+/* ── Profile mini-view ─────────────────────────────────── */
 const REGION_NAMES = { 0: 'Unspecified', 1: 'India 🇮🇳', 2: 'Europe 🇪🇺', 3: 'USA 🇺🇸' }
-const KYC_COLORS = { 0: '#475569', 1: '#f59e0b', 2: '#10b981', 3: '#ef4444' }
-const KYC_NAMES = { 0: 'Unspecified', 1: 'Pending', 2: 'Verified', 3: 'Failed' }
+const KYC_STATUS = { 0: { color: 'text-slate-500 bg-slate-500/10', label: 'Unspecified' }, 1: { color: 'text-amber-500 bg-amber-500/10', label: 'Pending' }, 2: { color: 'text-emerald-500 bg-emerald-500/10', label: 'Verified' }, 3: { color: 'text-rose-500 bg-rose-500/10', label: 'Failed' } }
 
 const ProfileModal = ({ user, onClose, onUpdated }) => {
   const [name, setName] = useState(user.name)
@@ -92,66 +78,56 @@ const ProfileModal = ({ user, onClose, onUpdated }) => {
     finally { setSaving(false) }
   }
 
-  const kycIdx = user.kyc_status || 0
-  const kycColor = KYC_COLORS[kycIdx] || '#475569'
-  const kycName = KYC_NAMES[kycIdx] || 'Unspecified'
+  const kyc = KYC_STATUS[user.kyc_status || 0]
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{ background: 'rgba(15,20,40,0.98)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 20, padding: '28px 28px', width: '100%', maxWidth: 420, animation: 'fadeInUp .25s ease' }}>
-        <style>{`@keyframes fadeInUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}`}</style>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 800 }}>Your Profile</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: 20, cursor: 'pointer' }}>✕</button>
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[1000] flex items-center justify-center p-6 animate-premium-in" onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} className="premium-glass p-8 w-full max-w-md animate-premium-in">
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-2xl font-black text-premium-gradient">User Identity</h2>
+          <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors">✕</button>
         </div>
-        {/* Avatar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 24 }}>
-          <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'linear-gradient(135deg,#6366f1,#06b6d4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 800 }}>
+
+        <div className="flex items-center gap-6 mb-8 p-4 bg-white/5 rounded-2xl">
+          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-2xl font-black shadow-xl">
             {user.name?.charAt(0).toUpperCase()}
           </div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>{user.name}</div>
-            <div style={{ fontSize: 12, color: '#64748b' }}>{user.email}</div>
+            <div className="font-bold text-lg">{user.name}</div>
+            <div className="text-sm text-slate-500 font-medium">{user.email}</div>
           </div>
         </div>
-        {/* Info rows */}
-        {[
-          { label: 'Phone', value: user.phone_number || 'Not set' },
-          { label: 'Region', value: REGION_NAMES[user.region] || 'Unspecified' },
-        ].map(r => (
-          <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,.06)', fontSize: 13 }}>
-            <span style={{ color: '#64748b' }}>{r.label}</span>
-            <span style={{ fontWeight: 600, color: '#f1f5f9' }}>{r.value}</span>
-          </div>
-        ))}
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,.06)', fontSize: 13 }}>
-          <span style={{ color: '#64748b' }}>KYC Status</span>
-          <span style={{ fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: `${kycColor}22`, color: kycColor }}>{kycName}</span>
+
+        <div className="space-y-4 mb-8">
+          {[
+            { label: 'Cloud Node', value: REGION_NAMES[user.region] || 'Unspecified' },
+            { label: 'KYC Security', value: kyc.label, customStyle: kyc.color },
+            ...(user.is_admin ? [{ label: 'Access Level', value: '🔐 Admin Shell', customStyle: 'text-rose-400 bg-rose-400/10' }] : [])
+          ].map(r => (
+            <div key={r.label} className="flex justify-between items-center text-sm py-1">
+              <span className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">{r.label}</span>
+              <span className={`font-black px-3 py-1 rounded-full text-xs ${r.customStyle || 'text-slate-200'}`}>{r.value}</span>
+            </div>
+          ))}
         </div>
-        {user.is_admin && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,.06)', fontSize: 13 }}>
-            <span style={{ color: '#64748b' }}>Role</span>
-            <span style={{ background: 'rgba(239,68,68,.12)', color: '#f87171', fontWeight: 700, padding: '2px 8px', borderRadius: 20, fontSize: 11 }}>🔐 Admin</span>
-          </div>
-        )}
-        {/* Edit name */}
-        <div style={{ marginTop: 20 }}>
-          <label style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Display Name</label>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input value={name} onChange={e => setName(e.target.value)} style={{ flex: 1, background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 10, padding: '10px 14px', color: '#f1f5f9', fontSize: 13, fontFamily: 'inherit', outline: 'none' }} />
-            <button onClick={save} disabled={saving || name === user.name} style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: 'white', border: 'none', borderRadius: 10, padding: '10px 16px', fontSize: 13, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving || name === user.name ? 0.5 : 1 }}>
-              {saving ? '…' : 'Save'}
+
+        <div className="space-y-3">
+          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Display Identity</label>
+          <div className="flex gap-2">
+            <input value={name} onChange={e => setName(e.target.value)} className="premium-input flex-1 h-12" />
+            <button onClick={save} disabled={saving || name === user.name} className="premium-btn px-6 disabled:opacity-30">
+              {saving ? '...' : 'Save'}
             </button>
           </div>
-          {msg && <div style={{ fontSize: 12, marginTop: 8, color: msg.type === 'ok' ? '#10b981' : '#ef4444' }}>{msg.text}</div>}
+          {msg && <div className={`text-xs px-1 ${msg.type === 'ok' ? 'text-emerald-400' : 'text-rose-400'}`}>{msg.text}</div>}
         </div>
-        {/* Phase 16: Add Passkey */}
-        <div style={{ marginTop: 20 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Security</div>
+
+        <div className="mt-8 pt-8 border-t border-white/5">
+          <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 px-1 text-center">Biometric Authentication</div>
           <PasskeyButton
             mode="register"
             token={localStorage.getItem('token')}
-            onSuccess={() => setMsg({ type: 'ok', text: '🔑 Passkey registered! You can now sign in without a password.' })}
+            onSuccess={() => setMsg({ type: 'ok', text: '🔑 Passkey registered!' })}
             onError={(e) => setMsg({ type: 'err', text: e })}
           />
         </div>
@@ -164,21 +140,18 @@ const ProfileModal = ({ user, onClose, onUpdated }) => {
 function App() {
   const [user, setUser] = useState(null)
   const [token, setToken] = useState(() => localStorage.getItem('token'))
-  const [view, setView] = useState('login')     // login | signup | dashboard | admin
+  const [view, setView] = useState('login')
   const [bootstrapping, setBootstrapping] = useState(true)
   const [toast, setToast] = useState(null)
   const [showProfile, setShowProfile] = useState(false)
-  const [navOpen, setNavOpen] = useState(false)
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 4000)
   }
 
-  // P-E: WebSocket real-time notifications
   useNotifications(user, token, showToast)
 
-  // Session restore on mount
   useEffect(() => {
     const storedToken = localStorage.getItem('token')
     if (!storedToken) { setBootstrapping(false); return }
@@ -227,109 +200,119 @@ function App() {
   }
 
   if (bootstrapping) return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-      <div style={{ width: 44, height: 44, borderRadius: '50%', border: '3px solid rgba(99,102,241,0.2)', borderTopColor: '#6366f1', animation: 'spin 0.8s linear infinite' }} />
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes fadeInUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}`}</style>
-      <p style={{ color: '#64748b', fontSize: 14 }}>Restoring session…</p>
+    <div className="min-h-screen flex flex-col items-center justify-center gap-6 bg-slate-950">
+      <div className="w-12 h-12 rounded-full border-4 border-indigo-500/20 border-t-indigo-500 animate-spin" />
+      <p className="text-slate-500 font-black text-xs uppercase tracking-[0.3em]">Synching Quantum State...</p>
     </div>
   )
 
   const isLoggedIn = !!token && !!user
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes fadeInUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}`}</style>
+    <div className="min-h-screen flex flex-col selection:bg-indigo-500/30">
       <Toast toast={toast} />
-      {showProfile && <ProfileModal user={user} onClose={() => setShowProfile(false)} onUpdated={(name) => { setUser(u => ({ ...u, name })); showToast('Name updated!') }} />}
+      {showProfile && <ProfileModal user={user} onClose={() => setShowProfile(false)} onUpdated={(name) => { setUser(u => ({ ...u, name })); showToast('Identity Updated') }} />}
 
-      {/* ── Nav ─────────────────────────────────────────────────────────── */}
-      <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 28px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(10,15,30,0.88)', backdropFilter: 'blur(20px)', position: 'sticky', top: 0, zIndex: 100 }}>
-        {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 34, height: 34, borderRadius: 9, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17 }}>⚡</div>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 14, letterSpacing: '-0.3px' }}>Global Genesis</div>
-            <div style={{ fontSize: 11, color: '#475569', marginTop: -1 }}>Financial OS v3.0</div>
+      {/* ── Modern Navigation ─────────────────────────────────────────────────────────── */}
+      <nav className="fixed top-0 left-0 right-0 z-[100] px-6 py-4">
+        <div className="max-w-7xl mx-auto premium-glass px-6 py-3 flex items-center justify-between border-white/5 shadow-2xl">
+          <div className="flex items-center gap-4 group cursor-pointer" onClick={() => setView('dashboard')}>
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-xl shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-transform">⚡</div>
+            <div className="hidden sm:block">
+              <div className="font-black text-sm tracking-tight text-premium-gradient">Global Genesis</div>
+              <div className="text-[10px] text-slate-500 font-black uppercase tracking-widest -mt-0.5">Financial OS v3</div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {isLoggedIn && (
+              <div className="flex items-center gap-1 bg-white/5 p-1 rounded-xl border border-white/5 mr-2">
+                {[
+                  { id: 'dashboard', label: 'Wallet' },
+                  ...(user.is_admin ? [{ id: 'admin', label: 'Admin Shell' }] : []),
+                ].map(nav => (
+                  <button key={nav.id} onClick={() => setView(nav.id)}
+                    className={`px-4 py-2 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${view === nav.id ? 'bg-indigo-500 text-white shadow-xl shadow-indigo-500/20' : 'text-slate-500 hover:text-white'}`}>
+                    {nav.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {isLoggedIn ? (
+              <div className="flex items-center gap-4">
+                <button onClick={() => setShowProfile(true)} className="flex items-center gap-3 group">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center text-xs font-black shadow-lg shadow-indigo-500/10 border-2 border-white/10 group-hover:border-indigo-400 transition-all">
+                    {user.name?.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="hidden md:block text-left">
+                    <div className="text-xs font-black text-slate-200">{user.name}</div>
+                    <div className="text-[9px] text-slate-500 font-black uppercase tracking-tighter">Verified Node</div>
+                  </div>
+                </button>
+                <div className="h-6 w-[1px] bg-white/10" />
+                <button onClick={handleLogout} className="text-slate-500 hover:text-rose-400 transition-colors p-2">
+                  <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                </button>
+              </div>
+            ) : (
+              <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">Secure Gateway Shell</div>
+            )}
           </div>
         </div>
-
-        {/* Nav links (when logged in) */}
-        {isLoggedIn && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {[
-              { id: 'dashboard', label: '◻ Wallet' },
-              ...(user.is_admin ? [{ id: 'admin', label: '🔐 Admin' }] : []),
-            ].map(nav => (
-              <button key={nav.id} onClick={() => setView(nav.id)}
-                style={{ background: view === nav.id ? 'rgba(99,102,241,.15)' : 'transparent', border: `1px solid ${view === nav.id ? 'rgba(99,102,241,.3)' : 'rgba(255,255,255,.07)'}`, borderRadius: 9, padding: '7px 14px', color: view === nav.id ? '#818cf8' : '#94a3b8', fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all .2s' }}>
-                {nav.label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* User chip + logout */}
-        {isLoggedIn && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button onClick={() => setShowProfile(true)} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 30, padding: '5px 12px', cursor: 'pointer', transition: 'all .2s' }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,.08)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,.04)'}>
-              <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'linear-gradient(135deg,#6366f1,#06b6d4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800 }}>
-                {user.name?.charAt(0).toUpperCase()}
-              </div>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9', textAlign: 'left' }}>{user.name}</div>
-                <div style={{ fontSize: 10, color: '#475569', marginTop: -1 }}>{user.is_admin ? '🔐 Admin' : user.email?.split('@')[0]}</div>
-              </div>
-            </button>
-            <button onClick={handleLogout} style={{ background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.2)', borderRadius: 8, padding: '6px 12px', color: '#f87171', fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all .2s' }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,.2)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(239,68,68,.1)'}>
-              Sign Out
-            </button>
-          </div>
-        )}
       </nav>
 
-      {/* ── Main ─────────────────────────────────────────────────────────── */}
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: !isLoggedIn ? 'center' : 'flex-start', padding: !isLoggedIn ? '40px 16px' : '28px 16px' }}>
+      {/* ── Main Content Area ─────────────────────────────────────────────────────────── */}
+      <main className={`flex-1 flex flex-col items-center w-full max-w-7xl mx-auto pt-32 pb-24 px-6 ${!isLoggedIn ? 'justify-center' : ''}`}>
         {!isLoggedIn ? (
           view === 'signup' ? (
-            <div className="animate-in" style={{ width: '100%', maxWidth: 460 }}>
-              <UserSignup onUserCreated={() => setView('login')} />
-              <div style={{ textAlign: 'center', marginTop: 16 }}>
-                <button onClick={() => setView('login')} style={{ background: 'none', border: 'none', color: '#6366f1', cursor: 'pointer', fontSize: 13 }}>← Back to Sign In</button>
+            <div className="w-full max-w-lg space-y-6">
+              <div className="text-center mb-10">
+                <h1 className="text-5xl font-black text-premium-gradient tracking-tighter mb-4">Create Identity</h1>
+                <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Join the Global Genesis Ecosystem</p>
+              </div>
+              <div className="premium-glass p-10 border-white/5 shadow-2xl">
+                <UserSignup onUserCreated={() => setView('login')} />
+                <button onClick={() => setView('login')} className="w-full mt-6 text-indigo-400 font-black text-xs uppercase tracking-widest hover:text-indigo-300 transition-colors">← Establish Secure Sign In</button>
               </div>
             </div>
           ) : (
-            <div style={{ width: '100%', maxWidth: 420 }}>
-              <Login onLogin={handleLogin} onSwitchToSignup={() => setView('signup')} />
-              {/* Phase 16: Passkey sign-in */}
-              <div style={{ marginTop: 12, padding: '0 4px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                  <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
-                  <span style={{ fontSize: 11, color: '#475569', whiteSpace: 'nowrap' }}>or use passkey</span>
-                  <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
+            <div className="w-full max-w-lg space-y-8">
+              <div className="text-center mb-10">
+                <h1 className="text-6xl font-black text-premium-gradient tracking-tight mb-4">Secure Shell</h1>
+                <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Accessing Genesis Mainframe v3.0</p>
+              </div>
+              <div className="premium-glass p-10 border-white/5 shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-violet-500 to-indigo-500" />
+                <Login onLogin={handleLogin} onSwitchToSignup={() => setView('signup')} />
+                <div className="my-10 flex items-center gap-6">
+                  <div className="flex-1 h-[1px] bg-white/5" />
+                  <span className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em]">Quantum Auth</span>
+                  <div className="flex-1 h-[1px] bg-white/5" />
                 </div>
                 <PasskeyButton
                   mode="authenticate"
                   email=""
                   onSuccess={({ token: t, user: u }) => handleLogin(u, t)}
-                  onError={(e) => console.warn('Passkey login failed:', e)}
+                  onError={(e) => console.warn('Passkey failed:', e)}
                 />
               </div>
             </div>
           )
         ) : view === 'admin' ? (
-          <AdminPanel user={user} />
+          <div className="w-full animate-premium-in">
+            <AdminPanel user={user} />
+          </div>
         ) : (
           <Suspense fallback={
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, marginTop: 80 }}>
-              <div style={{ width: 44, height: 44, borderRadius: '50%', border: '3px solid rgba(99,102,241,.2)', borderTopColor: '#6366f1', animation: 'spin .8s linear infinite' }} />
-              <p style={{ color: '#64748b', fontSize: 14 }}>Loading Wallet…</p>
+            <div className="flex flex-col items-center gap-6 mt-40">
+              <div className="w-12 h-12 rounded-full border-4 border-indigo-500/20 border-t-indigo-500 animate-spin" />
+              <p className="text-slate-500 font-black text-[10px] uppercase tracking-widest">Loading Distributed Wallet Shards...</p>
             </div>
           }>
-            <WalletDashboard user={user} />
+            <div className="w-full animate-premium-in">
+              <WalletDashboard user={user} />
+            </div>
           </Suspense>
         )}
       </main>
