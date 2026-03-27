@@ -380,3 +380,104 @@ class ConsultationSession(Base):
 
     patient = relationship("User", foreign_keys=[patient_id])
     doctor = relationship("User", foreign_keys=[doctor_id])
+
+class DriverProfile(Base):
+    """
+    Extends user identity for logistics partners.
+    Maps to RFC-007 Section 5.
+    """
+    __tablename__ = "driver_profiles"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("users.user_id"), index=True)
+    
+    # Vehicle details
+    vehicle_type = Column(String) # CAR, BIKE, SCOOTER
+    license_number = Column(String)
+    rating = Column(Float, default=5.0)
+    
+    # Current status: ONLINE, OFFLINE, BUSY
+    status = Column(String, default="OFFLINE") 
+    region = Column(SAEnum(Region))
+
+    user = relationship("User")
+
+class MerchantProfile(Base):
+    """
+    Extends user identity for store/restaurant partners.
+    """
+    __tablename__ = "merchant_profiles"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("users.user_id"), index=True)
+    
+    business_name = Column(String, index=True)
+    category = Column(String) # FOOD, GROCERY, PHARMACY
+    address = Column(String)
+    
+    # Coordinates for mapping
+    lat = Column(Float)
+    lng = Column(Float)
+    
+    region = Column(SAEnum(Region))
+
+class DeliveryOrder(Base):
+    """
+    Core FSM-driven delivery lifecycle record per RFC-007.
+    """
+    __tablename__ = "delivery_orders"
+
+    id = Column(String, primary_key=True, default=lambda: f"ord-{uuid.uuid4()}")
+    user_id = Column(String, ForeignKey("users.user_id"), index=True)
+    merchant_id = Column(String, ForeignKey("merchant_profiles.id"), index=True)
+    driver_id = Column(String, ForeignKey("driver_profiles.id"), index=True, nullable=True)
+    
+    # Lifecycle: SEARCHING, ACCEPTED, ARRIVING, IN_TRANSIT, COMPLETED, CANCELLED
+    status = Column(String, default="SEARCHING") 
+    
+    # Geospatial data
+    pickup_lat = Column(Float)
+    pickup_lng = Column(Float)
+    drop_lat = Column(Float)
+    drop_lng = Column(Float)
+    
+    # Financial reference
+    transaction_id = Column(String, ForeignKey("transactions.transaction_id"), nullable=True)
+    
+    total_amount = Column(Float)
+    currency = Column(SAEnum(Currency))
+    
+    created_at = Column(Float, default=lambda: time.time())
+    completed_at = Column(Float, nullable=True)
+    region = Column(SAEnum(Region))
+
+    user = relationship("User", foreign_keys=[user_id])
+    merchant = relationship("MerchantProfile")
+    driver = relationship("DriverProfile")
+
+class Notification(Base):
+    """
+    Unified notification engine per RFC-008 Section 4.
+    Supports prioritization (P0-P3) and cross-domain delivery.
+    """
+    __tablename__ = "notifications"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("users.user_id"), index=True)
+    
+    # Priority: P0 (CRITICAL), P1 (TRANSACTIONAL), P2 (SOCIAL), P3 (MARKETING)
+    priority = Column(Integer, default=2) 
+    
+    title = Column(String)
+    body = Column(Text)
+    
+    # Source: SOCIAL, HEALTH, WALLET, LOGISTICS
+    source_domain = Column(String) 
+    
+    is_delivered = Column(Boolean, default=False)
+    is_read = Column(Boolean, default=False)
+    
+    created_at = Column(Float, default=lambda: time.time())
+    region = Column(SAEnum(Region))
+
+    owner = relationship("User", backref="notifications")

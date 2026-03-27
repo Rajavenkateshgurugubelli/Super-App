@@ -16,7 +16,7 @@ import re
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
-from fastapi.responses import Response
+from fastapi.responses import Response, JSONResponse
 
 # ── Path setup ─────────────────────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -31,6 +31,7 @@ from app.security import SECRET_KEY, ALGORITHM
 from gateway.utils import mask_user_pii
 import hmac
 import hashlib
+from google.protobuf.json_format import MessageToDict
 
 # ── OpenTelemetry ──────────────────────────────────────────────────────────────
 from opentelemetry import trace
@@ -79,7 +80,6 @@ class WafMiddleware:
         # 1. Check Query Params
         query_string = req.url.query
         if SQLI_PATTERN.search(query_string) or XSS_PATTERN.search(query_string):
-            from fastapi.responses import JSONResponse
             res = JSONResponse(status_code=403, content={"detail": "WAF Blocked: Malicious query parameters detected."})
             return await res(scope, receive, send)
 
@@ -133,7 +133,33 @@ class WafMiddleware:
 
         await self.app(scope, receive_re_emit, send)
 
+# ── Regional Traffic Steering Middleware ──────────────────────────────────────
+class RegionalTrafficMiddleware:
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        # Look for custom region header or GeoIP (mocked here)
+        # Headers in ASGI scope are bytes, let's normalize to string keys
+        str_headers = {k.decode('utf-8').lower(): v.decode('utf-8') for k, v in scope.get("headers", [])}
+        region = str_headers.get("x-genesis-region", "US")
+        
+        # Enforce Data Residency: PHI must never leave regional shard
+        path = scope.get("path", "")
+        if "/api/health/records" in path:
+            if region not in ["US", "EU", "IN"]:
+                 # Block unknown regions for PHI
+                 from fastapi.responses import JSONResponse
+                 res = JSONResponse(status_code=403, content={"detail": "Data Residency Block: Access from unauthorized region."})
+                 return await res(scope, receive, send)
+
+        await self.app(scope, receive, send)
+
 app.add_middleware(WafMiddleware)
+app.add_middleware(RegionalTrafficMiddleware)
 
 # ── Redis (sync for rate limiting; async for pub/sub WebSocket) ────────────────
 REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
@@ -219,14 +245,39 @@ def get_default_stubs():
 # ── Auth helpers ───────────────────────────────────────────────────────────────
 security = HTTPBearer()
 
-def _decode_token(token: str) -> dict:
+# ── Scopes & Permissions ──────────────────────────────────────────────────────
+GENESIS_SCOPES = {
+    "IAM": "genesis:iam:read",
+    "SOCIAL": "genesis:social:read",
+    "HEALTH": "genesis:health:full_phi",
+    "LOGISTICS": "genesis:logistics:write",
+    "FINTECH": "genesis:fintech:pay",
+    "COMPLIANCE": "genesis:compliance:vault",
+    "RESEARCH": "genesis:research:read",
+    "MOBILITY": "genesis:mobility:write",
+    "GOVERNANCE": "genesis:governance:sign",
+}
+
+def _decode_token(token: str, required_scope: Optional[str] = None) -> dict:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         if not payload.get("user_id"):
             raise HTTPException(status_code=401, detail="Invalid token")
+        
+        # Scope Verification
+        if required_scope:
+            scopes = payload.get("scopes", [])
+            if required_scope not in scopes and "genesis:admin" not in scopes:
+                raise HTTPException(status_code=403, detail=f"Missing required scope: {required_scope}")
+        
         return payload
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+def require_scope(scope: str):
+    def scope_checker(credentials: HTTPAuthorizationCredentials = Depends(security)):
+        return _decode_token(credentials.credentials, scope)
+    return scope_checker
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
     return _decode_token(credentials.credentials)["user_id"]
@@ -350,6 +401,70 @@ class UpdateProfileRequest(BaseModel):
 
 class ExecuteNLRequest(BaseModel):
     command: str
+
+# -- Module 5: Social Models --
+class CreatePostRequest(BaseModel):
+    content: str
+    media_url: Optional[str] = None
+
+class FollowRequest(BaseModel):
+    followed_id: str
+
+# -- Module 6: Health Models --
+class CreateHealthRecordRequest(BaseModel):
+    encrypted_data: str
+    record_type: str
+
+class IssuePrescriptionRequest(BaseModel):
+    patient_id: str
+    medication_json: str
+    expiry_days: int = 30
+
+class ScheduleConsultationRequest(BaseModel):
+    doctor_id: str
+    scheduled_start: float
+
+# -- Module 7: Logistics Models --
+class CreateOrderRequest(BaseModel):
+    merchant_id: str
+    pickup: List[float] # [lat, lng]
+    dropoff: List[float] # [lat, lng]
+    amount: float
+    currency: int
+
+# -- Module 8: Integration Models --
+class NotificationRequest(BaseModel):
+    title: str
+    body: str
+    priority: int
+    domain: str
+class CreateHealthRecordRequest(BaseModel):
+    encrypted_data: str
+    record_type: str
+
+class IssuePrescriptionRequest(BaseModel):
+    patient_id: str
+    medication_json: str
+    expiry_days: int = 30
+
+class ScheduleConsultationRequest(BaseModel):
+    doctor_id: str
+    scheduled_start: float
+
+# -- Module 7: Logistics Models --
+class CreateOrderRequest(BaseModel):
+    merchant_id: str
+    pickup: List[float] # [lat, lng]
+    dropoff: List[float] # [lat, lng]
+    amount: float
+    currency: int
+
+# -- Module 8: Integration Models --
+class NotificationRequest(BaseModel):
+    title: str
+    body: str
+    priority: int
+    domain: str
 
 # ── Health ─────────────────────────────────────────────────────────────────────
 @app.get("/health")
@@ -722,13 +837,14 @@ def execute_ai_command(req: ExecuteNLRequest, token_data: dict = Depends(get_tok
             
             # Re-use existing transfer function locally
             try:
-                res = transfer_funds(transfer_req, user_id)
+                res = transfer_funds(transfer_req, token_data) # Pass token_data for dependency
                 return {"success": True, "message": f"Successfully executed intent: Transferred {amount} to {target}", "transaction": res}
             except HTTPException as e:
                 return {"success": False, "message": f"Failed to execute intent: {str(e.detail)}"}
                 
         elif action == "check_balance":
-            res = get_balance(user_wallet.wallet_id, user_id)
+            # Re-use existing get_wallet_balance function locally
+            res = await get_wallet_balance(user_wallet.wallet_id, token_data) # Pass token_data for dependency
             return {"success": True, "message": f"Successfully executed intent: Balance is {res['balance']} {res['currency']}"}
             
     except Exception:
@@ -823,7 +939,7 @@ async def websocket_notifications(websocket: WebSocket, user_id: str, token: str
     # Validate token from query param
     token = websocket.query_params.get("token", "")
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token.encode('utf-8'), SECRET_KEY, algorithms=[ALGORITHM])
         if payload.get("user_id") != user_id:
             await websocket.close(code=1008)
             return
@@ -982,6 +1098,111 @@ def webauthn_login_complete(req: WebAuthnLoginCompleteRequest):
         }
     except grpc.RpcError as e:
         raise HTTPException(status_code=401, detail=e.details())
+
+
+# ── Module 5: Social Media Endpoints ──────────────────────────────────────────
+from app.services.social_service import SocialService
+from app.database import get_db
+from sqlalchemy.orm import Session
+
+@app.get("/api/social/feed")
+async def get_social_feed(token_data: dict = Depends(require_scope(GENESIS_SCOPES["SOCIAL"]))):
+    user_id = token_data["user_id"]
+    region = token_data.get("region", 1)
+    # SocialService might need to be refactored to use gRPC stubs directly
+    # For now, assuming it can operate without a direct DB session or will be adapted.
+    # Placeholder for actual gRPC call or service integration
+    return {"feed": []} # Placeholder
+
+@app.post("/api/social/follow")
+async def follow_user(req: FollowRequest, token_data: dict = Depends(require_scope(GENESIS_SCOPES["SOCIAL"]))):
+    user_id = token_data["user_id"]
+    region = token_data.get("region", 1)
+    # Placeholder for actual gRPC call or service integration
+    return {"status": "success", "relationship_id": "mock_rel_id"} # Placeholder
+
+@app.post("/api/social/posts")
+async def create_social_post(req: CreatePostRequest, token_data: dict = Depends(require_scope(GENESIS_SCOPES["SOCIAL"]))):
+    user_id = token_data["user_id"]
+    region = token_data.get("region", 1)
+    # Placeholder for actual gRPC call or service integration
+    return {"status": "created", "post_id": "mock_post_id"} # Placeholder
+
+# ── Module 6: Health & Telemedicine Endpoints ──────────────────────────────────
+from app.services.health_service import HealthService
+
+@app.get("/api/health/records")
+async def list_health_records(token_data: dict = Depends(require_scope(GENESIS_SCOPES["HEALTH"]))):
+    user_id = token_data["user_id"]
+    region = token_data.get("region", 1)
+    # Placeholder for actual gRPC call or service integration
+    return {"records": []} # Placeholder
+
+@app.post("/api/health/records")
+async def add_health_record(req: CreateHealthRecordRequest, token_data: dict = Depends(require_scope(GENESIS_SCOPES["HEALTH"]))):
+    user_id = token_data["user_id"]
+    region = token_data.get("region", 1)
+    # Placeholder for actual gRPC call or service integration
+    return {"status": "stored", "record_id": "mock_record_id"} # Placeholder
+
+@app.post("/api/health/consultations")
+def schedule_health_consultation(req: ScheduleConsultationRequest, db: Session = Depends(get_db), token_data: dict = Depends(require_scope(GENESIS_SCOPES["HEALTH"]))):
+    user_id = token_data["user_id"]
+    region = token_data.get("region", 1)
+    service = HealthService(db)
+    session = service.schedule_consultation(user_id, req.doctor_id, req.scheduled_start, region)
+    return {"status": "scheduled", "session_id": session.id, "room_id": session.room_id}
+
+# ── Module 7: Logistics & Delivery Endpoints ───────────────────────────────────
+from app.services.logistics_service import LogisticsService
+
+@app.post("/api/logistics/orders")
+def create_logistics_order(req: CreateOrderRequest, db: Session = Depends(get_db), token_data: dict = Depends(require_scope(GENESIS_SCOPES["LOGISTICS"]))):
+    user_id = token_data["user_id"]
+    region = token_data.get("region", 1)
+    service = LogisticsService(db)
+    order = service.create_order(
+        user_id, req.merchant_id, 
+        (req.pickup[0], req.pickup[1]), 
+        (req.dropoff[0], req.dropoff[1]), 
+        req.amount, req.currency, region
+    )
+    return {"status": "searching", "order_id": order.id}
+
+@app.get("/api/logistics/orders/{order_id}")
+def get_delivery_order(order_id: str, db: Session = Depends(get_db), token_data: dict = Depends(require_scope(GENESIS_SCOPES["LOGISTICS"]))):
+    service = LogisticsService(db)
+    order = service.update_order_status(order_id, "PENDING") # Peek/Update logic
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return {"order_id": order.id, "status": order.status, "driver_id": order.driver_id}
+
+# ── Module 8: Super Integration Endpoints ─────────────────────────────────────
+from app.services.integration_service import IntegrationService
+
+@app.get("/api/search")
+def unified_search(q: str, db: Session = Depends(get_db), token_data: dict = Depends(require_scope(GENESIS_SCOPES["IAM"]))):
+    user_id = token_data["user_id"]
+    region = token_data.get("region", 1)
+    service = IntegrationService(db)
+    results = service.unified_search(user_id, q, region)
+    return {"query": q, "results": results}
+
+@app.get("/api/notifications")
+def get_notifications(db: Session = Depends(get_db), token_data: dict = Depends(require_scope(GENESIS_SCOPES["IAM"]))):
+    user_id = token_data["user_id"]
+    service = IntegrationService(db)
+    notifications = service.get_user_notifications(user_id)
+    return {"notifications": notifications}
+
+@app.post("/api/notifications")
+def send_notification(req: NotificationRequest, db: Session = Depends(get_db), token_data: dict = Depends(require_scope(GENESIS_SCOPES["COMPLIANCE"]))):
+    # Only administrative/system scopes can broadcast notifications
+    user_id = token_data["user_id"]
+    region = token_data.get("region", 1)
+    service = IntegrationService(db)
+    notif = service.send_notification(user_id, req.title, req.body, req.priority, req.domain, region)
+    return {"status": "sent", "notification_id": notif.id}
 
 if __name__ == "__main__":
     import uvicorn

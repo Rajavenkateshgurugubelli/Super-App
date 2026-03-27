@@ -35,7 +35,7 @@ class SocialService:
             return existing
 
         new_rel = SocialRelationship(
-            id=f"rel_{uuid.uuid4().hex[:8]}",
+            id=f"rel_{uuid.uuid4()}",
             follower_id=follower_id,
             followed_id=followed_id,
             type="FOLLOW",
@@ -73,7 +73,7 @@ class SocialService:
         self.unfollow_user(blocked_id, blocker_id)
 
         new_block = SocialRelationship(
-            id=f"blk_{uuid.uuid4().hex[:8]}",
+            id=f"blk_{uuid.uuid4()}",
             follower_id=blocker_id,
             followed_id=blocked_id,
             type="BLOCK",
@@ -88,7 +88,7 @@ class SocialService:
         Creates a new activity feed item.
         """
         new_activity = FeedActivity(
-            id=f"act_{uuid.uuid4().hex[:8]}",
+            id=f"act_{uuid.uuid4()}",
             user_id=user_id,
             activity_type="POST",
             content=content, # Can be raw text or JSON
