@@ -23,7 +23,7 @@ import os
 sys.path.append(os.getcwd())
 
 from app.database import Base
-from app.models import User, Wallet, Transaction # Import to register models
+from app.models import User, UserPII, Wallet, Transaction # Import to register models
 
 target_metadata = Base.metadata
 

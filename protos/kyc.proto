@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package kyc;
+
+import "user.proto";
+
+service KycService {
+  rpc InitiateKyc (InitiateKycRequest) returns (InitiateKycResponse);
+  rpc GetKycStatus (GetKycStatusRequest) returns (GetKycStatusResponse);
+  rpc UpdateKycStatus (UpdateKycStatusRequest) returns (UpdateKycStatusResponse);
+}
+
+message InitiateKycRequest {
+  string user_id = 1;
+  user.Region region = 2;
+  string document_type = 3; // e.g. "Passport", "SSN", "Aadhaar"
+  string document_id = 4;
+  string encoded_image = 5; // Simplified for demo
+}
+
+message InitiateKycResponse {
+  string kyc_id = 1;
+  user.KycStatus status = 2;
+  string message = 3;
+}
+
+message GetKycStatusRequest {
+  string user_id = 1;
+}
+
+message GetKycStatusResponse {
+  user.KycStatus status = 1;
+  string message = 2;
+}
+
+message UpdateKycStatusRequest {
+  string user_id = 1;
+  user.KycStatus status = 2;
+  string message = 3;
+}
+
+message UpdateKycStatusResponse {
+  bool success = 1;
+}

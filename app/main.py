@@ -13,10 +13,10 @@ sys.path.append(current_dir)
 sys.path.append(os.path.dirname(current_dir))
 
 # Generated code imports
-from app import user_pb2_grpc, wallet_pb2_grpc, policy_pb2_grpc
+from app import user_pb2_grpc, wallet_pb2_grpc, policy_pb2_grpc, kyc_pb2_grpc
 
 # Service implementations
-from app.services import user_service, wallet_service, policy_service
+from app.services import user_service, wallet_service, policy_service, kyc_service
 from app.middleware import interceptors
 
 # OpenTelemetry Imports
@@ -58,6 +58,7 @@ def serve():
     user_pb2_grpc.add_UserServiceServicer_to_server(user_service.UserService(), server)
     wallet_pb2_grpc.add_WalletServiceServicer_to_server(wallet_service.WalletService(), server)
     policy_pb2_grpc.add_PolicyServiceServicer_to_server(policy_service.PolicyService(), server)
+    kyc_pb2_grpc.add_KycServiceServicer_to_server(kyc_service.KycService(), server)
 
     # Enable Reflection (optional, for debugging with grpcurl)
     # from grpc_reflection.v1alpha import reflection

@@ -197,7 +197,8 @@ class WalletService(wallet_pb2_grpc.WalletServiceServicer):
                 owner_user = session.query(User).filter(User.user_id == source_wallet.user_id).first()
                 dest_owner = session.query(User).filter(User.user_id == dest_wallet.user_id).first()
                 
-                target_region_val = str(dest_owner.region.value) if dest_owner else "0"
+                primary_region = owner_user.primary_region if owner_user else models.Region.UNSPECIFIED
+                target_region_val = str(dest_owner.primary_region.value) if dest_owner else "0"
                 
                 # Check Compliance
                 policy_channel = grpc.insecure_channel('localhost:50051')
@@ -238,31 +239,104 @@ class WalletService(wallet_pb2_grpc.WalletServiceServicer):
                 
                 self._logger.info(f"Smart Routing applied. Path: {' -> '.join(routing_path)}. Fee: {routing_fee}. Final: {credit_amount}")
 
-            # Perform Transfer (fee is essentially deducted natively from the credit constraint via spread)
+            # Transaction ID for all related records
+            txn_id = str(uuid.uuid4())
+
+            # ── 12-Leg Double-Entry Model (RFC-002 Section 4.3) ──
+            # We use a set of entries to ensure Sum(DR) == Sum(CR) per currency.
+            
+            # 1. Platform Fee & Spread Calculation
+            platform_fee_pct = 0.015 # 1.5%
+            fx_spread_pct = 0.005    # 0.5%
+            
+            fee_amount = debit_amount * platform_fee_pct if source_wallet.currency != dest_wallet.currency else 0.0
+            spread_amount = debit_amount * fx_spread_pct if source_wallet.currency != dest_wallet.currency else 0.0
+            net_to_convert = debit_amount - fee_amount - spread_amount
+            
+            # 2. Define System Account IDs
+            OMNIBUS_SRC = f"OMNIBUS_{source_wallet.currency.name}_{owner_user.primary_region.name}"
+            OMNIBUS_DST = f"OMNIBUS_{dest_wallet.currency.name}_{dest_owner.primary_region.name}"
+            FEE_REV = "PLATFORM_FEE_REVENUE_USD"
+            FX_REV = "FX_SPREAD_REVENUE_USD"
+            FX_POOL_SRC = f"FX_POOL_{source_wallet.currency.name}"
+            FX_POOL_DST = f"FX_POOL_{dest_wallet.currency.name}"
+
+            # Helper for creating ledger entries
+            def add_leg(acc_id, acc_type, amount, entry_type, ccy, desc):
+                entry = models.LedgerEntry(
+                    id=str(uuid.uuid4()),
+                    transaction_id=txn_id,
+                    account_id=acc_id,
+                    account_type=acc_type,
+                    amount=amount,
+                    entry_type=entry_type,
+                    currency=ccy,
+                    description=desc
+                )
+                session.add(entry)
+                # Update SystemAccount materialized view if applicable
+                if acc_type != models.AccountType.USER_WALLET:
+                    sys_acc = session.query(models.SystemAccount).filter(models.SystemAccount.id == acc_id).with_for_update().first()
+                    if not sys_acc:
+                        sys_acc = models.SystemAccount(id=acc_id, account_type=acc_type, currency=ccy, balance=0.0)
+                        session.add(sys_acc)
+                    if entry_type == models.EntryType.DEBIT:
+                        sys_acc.balance -= amount
+                    else:
+                        sys_acc.balance += amount
+
+            # --- EXECUTE LEGS ---
+            # Leg 1-2: User -> Omnibus (Source)
+            add_leg(source_wallet.wallet_id, models.AccountType.USER_WALLET, debit_amount, models.EntryType.DEBIT, source_wallet.currency, f"Transfer to {target_wallet_id}")
+            add_leg(OMNIBUS_SRC, models.AccountType.OMNIBUS, debit_amount, models.EntryType.CREDIT, source_wallet.currency, "Omnibus Receive")
+            
+            if source_wallet.currency != dest_wallet.currency:
+                # Leg 3-4: Extract Platform Fee
+                add_leg(OMNIBUS_SRC, models.AccountType.OMNIBUS, fee_amount, models.EntryType.DEBIT, source_wallet.currency, "Extract Platform Fee")
+                add_leg(FEE_REV, models.AccountType.REVENUE, fee_amount, models.EntryType.CREDIT, source_wallet.currency, "Fee Revenue Recognized")
+                
+                # Leg 5-6: Extract FX Spread
+                add_leg(OMNIBUS_SRC, models.AccountType.OMNIBUS, spread_amount, models.EntryType.DEBIT, source_wallet.currency, "Extract FX Spread")
+                add_leg(FX_REV, models.AccountType.REVENUE, spread_amount, models.EntryType.CREDIT, source_wallet.currency, "FX Spread Revenue Recognized")
+                
+                # Leg 7-8: Move to FX Pool
+                add_leg(OMNIBUS_SRC, models.AccountType.OMNIBUS, net_to_convert, models.EntryType.DEBIT, source_wallet.currency, "Send to FX Pool")
+                add_leg(FX_POOL_SRC, models.AccountType.FX_POOL, net_to_convert, models.EntryType.CREDIT, source_wallet.currency, "FX Pool Inbound")
+                
+                # Leg 9-10: Release from FX Pool (Converted)
+                add_leg(FX_POOL_DST, models.AccountType.FX_POOL, credit_amount, models.EntryType.DEBIT, dest_wallet.currency, "FX Pool Outbound")
+                add_leg(OMNIBUS_DST, models.AccountType.OMNIBUS, credit_amount, models.EntryType.CREDIT, dest_wallet.currency, "Omnibus Receive (Converted)")
+            
+            # Leg 11-12: Release to Destination Wallet
+            add_leg(OMNIBUS_DST if source_wallet.currency != dest_wallet.currency else OMNIBUS_SRC, 
+                    models.AccountType.OMNIBUS, credit_amount, models.EntryType.DEBIT, dest_wallet.currency, "Release to Receiver")
+            add_leg(dest_wallet.wallet_id, models.AccountType.USER_WALLET, credit_amount, models.EntryType.CREDIT, dest_wallet.currency, f"Transfer from {request.from_wallet_id}")
+
+            # Update balances (Materialized View of Ledger)
             source_wallet.balance -= debit_amount
             dest_wallet.balance += credit_amount
 
             # Record Transaction
-            txn_id = str(uuid.uuid4())
             txn = Transaction(
                 transaction_id=txn_id,
                 from_wallet_id=request.from_wallet_id,
-                to_wallet_id=request.to_wallet_id,
+                to_wallet_id=target_wallet_id,
                 amount=debit_amount, 
                 status="SUCCESS",
                 timestamp=time.time()
             )
             session.add(txn)
             
-            # Record Conversion Rate
-            conv_rate = models.ConversionRate(
-                transaction_id=txn_id,
-                from_currency=str(source_wallet.currency.name),
-                to_currency=str(dest_wallet.currency.name),
-                rate=exchange_rate_value,
-                timestamp=time.time()
-            )
-            session.add(conv_rate)
+            # Record Conversion Rate if applicable
+            if source_wallet.currency != dest_wallet.currency:
+                conv_rate = models.ConversionRate(
+                    transaction_id=txn_id,
+                    from_currency=str(source_wallet.currency.name),
+                    to_currency=str(dest_wallet.currency.name),
+                    rate=exchange_rate_value,
+                    timestamp=time.time()
+                )
+                session.add(conv_rate)
             
             session.commit()
 
@@ -425,6 +499,66 @@ class WalletService(wallet_pb2_grpc.WalletServiceServicer):
         # Amount in To = (Amount / from_rate) * to_rate
         
         return to_rate / from_rate
+
+    def RefundFunds(self, request, context):
+        self._logger.info(f"SAGA: Refunding {request.amount} for txn {request.original_transaction_id}")
+        session = SessionLocal()
+        try:
+            # 1. Lookup original txn
+            orig_txn = session.query(Transaction).filter(Transaction.transaction_id == request.original_transaction_id).first()
+            if not orig_txn:
+                 return wallet_pb2.RefundFundsResponse(success=False, message="Original transaction not found")
+
+            source_wallet = session.query(Wallet).filter(Wallet.wallet_id == request.wallet_id).with_for_update().first()
+            if not source_wallet:
+                 return wallet_pb2.RefundFundsResponse(success=False, message="Target wallet not found")
+
+            # 2. Regional Context for Omnibus
+            owner = session.query(User).filter(User.user_id == source_wallet.user_id).first()
+            region_name = owner.primary_region.name if owner else "UNSPECIFIED"
+            OMNIBUS_SRC = f"OMNIBUS_{source_wallet.currency.name}_{region_name}"
+            
+            comp_id = str(uuid.uuid4())
+
+            # 3. Compensating Legs (Simplification: Return from Omnibus to User)
+            # In a full flow, we'd also reverse fees if they were charged, but for mvp rollback is key.
+            
+            # Leg 1-2: Omnibus (Source) -> User
+            # We reuse the add_leg logic (defined inside TransferFunds, so we need to move it or re-implement)
+            # Refactor: Helper method for ledger leg creation
+            def _create_leg(acc_id, acc_type, amount, entry_type, ccy, desc):
+                entry = models.LedgerEntry(
+                    id=str(uuid.uuid4()),
+                    transaction_id=comp_id,
+                    account_id=acc_id,
+                    account_type=acc_type,
+                    amount=amount,
+                    entry_type=entry_type,
+                    currency=ccy,
+                    description=desc
+                )
+                session.add(entry)
+                if acc_type != models.AccountType.USER_WALLET:
+                    sys_acc = session.query(models.SystemAccount).filter(models.SystemAccount.id == acc_id).with_for_update().first()
+                    if sys_acc:
+                        if entry_type == models.EntryType.DEBIT: sys_acc.balance -= amount
+                        else: sys_acc.balance += amount
+
+            _create_leg(OMNIBUS_SRC, models.AccountType.OMNIBUS, request.amount, models.EntryType.DEBIT, source_wallet.currency, f"Refund for {request.original_transaction_id}")
+            _create_leg(source_wallet.wallet_id, models.AccountType.USER_WALLET, request.amount, models.EntryType.CREDIT, source_wallet.currency, f"Refund: {request.reason}")
+
+            # 4. Update status
+            source_wallet.balance += request.amount
+            orig_txn.status = "REFUNDED"
+            
+            session.commit()
+            return wallet_pb2.RefundFundsResponse(success=True, compensation_id=comp_id, message="Refund successful")
+        except Exception as e:
+            self._logger.error(f"Refund failed: {e}")
+            session.rollback()
+            return wallet_pb2.RefundFundsResponse(success=False, message=str(e))
+        finally:
+            session.close()
 
     def _map_wallet_to_proto(self, wallet_model):
         return wallet_pb2.Wallet(

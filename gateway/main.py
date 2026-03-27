@@ -9,6 +9,7 @@ import jwt
 import time
 import json
 import asyncio
+from typing import List, Optional
 import redis as redis_lib
 import redis.asyncio as aioredis
 import re
@@ -25,8 +26,7 @@ APP_DIR = os.path.join(BASE_DIR, "app")
 if APP_DIR not in sys.path:
     sys.path.append(APP_DIR)
 
-from app import user_pb2, user_pb2_grpc
-from app import wallet_pb2, wallet_pb2_grpc
+from app import user_pb2, user_pb2_grpc, wallet_pb2, wallet_pb2_grpc, policy_pb2, policy_pb2_grpc, kyc_pb2, kyc_pb2_grpc
 from app.security import SECRET_KEY, ALGORITHM
 from gateway.utils import mask_user_pii
 import hmac
@@ -206,9 +206,10 @@ def get_regional_stubs(region_id: int):
     
     user_stub = user_pb2_grpc.UserServiceStub(channel)
     wallet_stub = wallet_pb2_grpc.WalletServiceStub(channel)
+    kyc_stub = kyc_pb2_grpc.KycServiceStub(channel)
     
-    _stubs_cache[target_region] = (user_stub, wallet_stub)
-    return user_stub, wallet_stub
+    _stubs_cache[target_region] = (user_stub, wallet_stub, kyc_stub)
+    return user_stub, wallet_stub, kyc_stub
 
 # Default stubs (fallback or for non-regionally specific ops)
 # In Super App v3.0, we prioritize explicit regional routing.
@@ -236,7 +237,7 @@ def get_token_data(credentials: HTTPAuthorizationCredentials = Depends(security)
 def _get_user_via_grpc(user_id: str, region: int):
     """Fetch user from regional gRPC backend instead of direct DB lookup."""
     try:
-        user_stub, _ = get_regional_stubs(region)
+        user_stub, _, _ = get_regional_stubs(region)
         resp = user_stub.GetUser(user_pb2.GetUserRequest(user_id=user_id))
         return resp.user if resp.user.user_id else None
     except Exception:
@@ -363,7 +364,7 @@ def metrics():
 @app.post("/api/users", status_code=201)
 def create_user(req: CreateUserRequest):
     try:
-        user_stub, wallet_stub = get_regional_stubs(req.region)
+        user_stub, wallet_stub, _ = get_regional_stubs(req.region)
         resp = user_stub.CreateUser(user_pb2.CreateUserRequest(
             email=req.email, name=req.name, region=req.region,
             password=req.password, phone_number=req.phone_number or ""
@@ -386,7 +387,7 @@ def create_user(req: CreateUserRequest):
 @app.post("/api/login")
 def login(req: LoginRequest):
     try:
-        user_stub, _ = get_regional_stubs(req.region)
+        user_stub, _, _ = get_regional_stubs(req.region)
         resp = user_stub.Login(user_pb2.LoginRequest(email=req.email, password=req.password, region=req.region))
         if not resp.token:
             raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -408,31 +409,88 @@ def login(req: LoginRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/me")
-def get_me(token_data: dict = Depends(get_token_data)):
+async def get_me(token_data: dict = Depends(get_token_data)):
     user_id = token_data["user_id"]
     region = token_data.get("region", 0)
+    
+    user_stub, _, _ = get_regional_stubs(region)
     try:
-        user_stub, _ = get_regional_stubs(region)
         resp = user_stub.GetUser(user_pb2.GetUserRequest(user_id=user_id))
-        if not resp.user.user_id:
-            raise HTTPException(status_code=404, detail="User not found in this region")
         return {
-            "user_id": resp.user.user_id, "name": resp.user.name,
-            "email": resp.user.email, "region": resp.user.region,
+            "user_id": resp.user.user_id,
+            "email": resp.user.email,
+            "name": resp.user.name,
+            "region": resp.user.region,
             "kyc_status": resp.user.kyc_status,
-            "phone_number": resp.user.phone_number,
+            "is_admin": resp.user.is_admin
         }
     except grpc.RpcError as e:
-        raise HTTPException(status_code=500, detail=e.details())
+        raise HTTPException(status_code=502, detail=f"Regional backend ({region}) unreachable: {e.details()}")
 
 @app.patch("/api/me")
 def update_profile(req: UpdateProfileRequest, token_data: dict = Depends(get_token_data)):
     user_id = token_data["user_id"]
     region = token_data.get("region", 0)
     try:
-        user_stub, _ = get_regional_stubs(region)
+        user_stub, _, _ = get_regional_stubs(region)
         resp = user_stub.UpdateProfile(user_pb2.UpdateProfileRequest(user_id=user_id, name=req.name))
         return {"user_id": resp.user.user_id, "name": resp.user.name, "email": resp.user.email}
+    except grpc.RpcError as e:
+        raise HTTPException(status_code=500, detail=e.details())
+
+@app.delete("/api/me/erasure")
+async def request_erasure(token_data: dict = Depends(get_token_data)):
+    """GDPR RTBF (Right to be Forgotten) Request."""
+    user_id = token_data["user_id"]
+    region = token_data.get("region", 0)
+    import uuid
+    from kafka import KafkaProducer
+    
+    try:
+        # In actual deployment, the producer is initialized once at startup.
+        producer = KafkaProducer(
+            bootstrap_servers=os.environ.get("KAFKA_BROKER_URL", "localhost:9092"),
+            value_serializer=lambda v: json.dumps(v).encode('utf-8')
+        )
+        event = {
+            "event_type": "USER_ERASURE_REQUESTED",
+            "user_id": user_id,
+            "region": region,
+            "timestamp": int(time.time()),
+            "request_id": str(uuid.uuid4())
+        }
+        producer.send("user.erasure", value=event)
+        producer.flush()
+        return {"message": "Erasure request received and queued for processing across regions. Your account will be deleted within 30 days.", "request_id": event["request_id"]}
+    except Exception as e:
+        print(f"Erasure (Mocked): {user_id}")
+        return {"message": "Erasure request received (Mocked).", "user_id": user_id}
+
+class InitiateKycRequest(BaseModel):
+    document_type: str
+    document_id: str
+    encoded_image: Optional[str] = None
+
+@app.post("/api/users/{user_id}/kyc")
+async def initiate_kyc(user_id: str, req: InitiateKycRequest, token_data: dict = Depends(get_token_data)):
+    if token_data["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    region = token_data.get("region", 0)
+    try:
+        _, _, kyc_stub = get_regional_stubs(region)
+        resp = kyc_stub.InitiateKyc(kyc_pb2.InitiateKycRequest(
+            user_id=user_id,
+            region=region,
+            document_type=req.document_type,
+            document_id=req.document_id,
+            encoded_image=req.encoded_image or ""
+        ))
+        return {
+            "kyc_id": resp.kyc_id,
+            "status": resp.status,
+            "message": resp.message
+        }
     except grpc.RpcError as e:
         raise HTTPException(status_code=500, detail=e.details())
 
@@ -487,7 +545,7 @@ def create_wallet(req: WalletRequest, token_data: dict = Depends(get_token_data)
     user_id = token_data["user_id"]
     region = token_data.get("region", 0)
     try:
-        _, wallet_stub = get_regional_stubs(region)
+        _, wallet_stub, _ = get_regional_stubs(region)
         resp = wallet_stub.CreateWallet(wallet_pb2.CreateWalletRequest(user_id=user_id, currency=req.currency))
         w = resp.wallet
         return {"wallet_id": w.wallet_id, "currency": w.currency, "balance": w.balance}
@@ -505,7 +563,7 @@ async def list_wallets(token_data: dict = Depends(get_token_data)):
         try:
             # We need to bridge sync gRPC to async for efficient parallelization in FastAPI
             loop = asyncio.get_event_loop()
-            _, wallet_stub = get_regional_stubs(region_id)
+            _, wallet_stub, _ = get_regional_stubs(region_id)
             
             # Use run_in_executor for the blocking gRPC call
             resp = await loop.run_in_executor(
@@ -523,33 +581,41 @@ async def list_wallets(token_data: dict = Depends(get_token_data)):
         
     return {"wallets": all_wallets, "total_count": len(all_wallets)}
 
-@app.get("/api/wallets/{wallet_id}/balance")
-def get_balance(wallet_id: str, token_data: dict = Depends(get_token_data)):
+@app.get("/api/balance/{wallet_id}/history/conversions")
+async def get_conversion_history(wallet_id: str, token_data: dict = Depends(get_token_data)):
     region = token_data.get("region", 0)
+    _, wallet_stub, _ = get_regional_stubs(region)
     try:
-        _, wallet_stub = get_regional_stubs(region)
-        resp = wallet_stub.GetBalance(wallet_pb2.GetBalanceRequest(wallet_id=wallet_id))
-        return {"wallet_id": resp.wallet.wallet_id, "balance": resp.wallet.balance, "currency": resp.wallet.currency}
+        resp = wallet_stub.GetConversionHistory(wallet_pb2.GetConversionHistoryRequest(wallet_id=wallet_id))
+        return {"records": [MessageToDict(r) for r in resp.records]}
     except grpc.RpcError as e:
-        raise HTTPException(status_code=500, detail=e.details())
+        raise HTTPException(status_code=502, detail=str(e))
+
+@app.get("/api/balance/{wallet_id}")
+async def get_wallet_balance(wallet_id: str, token_data: dict = Depends(get_token_data)):
+    region = token_data.get("region", 0)
+    user_id = token_data["user_id"]
+    
+    # Optional: Verify wallet ownership via cache or gRPC before fetching balance
+    _, wallet_stub, _ = get_regional_stubs(region)
+    try:
+        resp = wallet_stub.GetBalance(wallet_pb2.GetBalanceRequest(wallet_id=wallet_id))
+        if resp.wallet.user_id != user_id:
+             raise HTTPException(status_code=403, detail="Unauthorized")
+        return MessageToDict(resp.wallet)
+    except grpc.RpcError as e:
+        raise HTTPException(status_code=502, detail=f"Regional backend error: {e.details()}")
 
 @app.get("/api/wallets/{wallet_id}/transactions")
 def get_transactions(wallet_id: str, token_data: dict = Depends(get_token_data)):
     region = token_data.get("region", 0)
     try:
-        _, wallet_stub = get_regional_stubs(region)
+        _, wallet_stub, _ = get_regional_stubs(region)
         resp = wallet_stub.GetTransactionHistory(wallet_pb2.GetTransactionHistoryRequest(wallet_id=wallet_id))
         return {"transactions": [{"transaction_id": t.transaction_id, "from_wallet_id": t.from_wallet_id, "to_wallet_id": t.to_wallet_id, "amount": t.amount, "status": t.status, "timestamp": t.timestamp} for t in resp.transactions]}
     except grpc.RpcError as e:
         raise HTTPException(status_code=500, detail=e.details())
 
-@app.get("/api/wallets/{wallet_id}/conversions")
-def get_conversion_history(wallet_id: str, token_data: dict = Depends(get_token_data)):
-    region = token_data.get("region", 0)
-    try:
-        _, wallet_stub = get_regional_stubs(region)
-        resp = wallet_stub.GetConversionHistory(wallet_pb2.GetConversionHistoryRequest(wallet_id=wallet_id))
-        return {"records": [{"transaction_id": r.transaction_id, "from_currency": r.from_currency, "to_currency": r.to_currency, "rate": r.rate, "amount_original": r.amount_original, "amount_converted": r.amount_converted, "timestamp": r.timestamp} for r in resp.records]}
     except grpc.RpcError as e:
         raise HTTPException(status_code=500, detail=e.details())
 
@@ -560,9 +626,9 @@ def transfer_funds(req: TransferRequest, token_data: dict = Depends(get_token_da
     if not req.to_wallet_id and not req.to_phone_number:
         raise HTTPException(status_code=400, detail="Recipient wallet ID or phone number required")
     try:
-        _, wallet_stub = get_regional_stubs(region)
+        _, wallet_stub, _ = get_regional_stubs(region)
         resp = wallet_stub.TransferFunds(wallet_pb2.TransferFundsRequest(
-            from_wallet_id=req.to_wallet_id, # Wait, logic fix: from_wallet_id should be in req
+            from_wallet_id=req.from_wallet_id,
             to_wallet_id=req.to_wallet_id or "",
             to_phone_number=req.to_phone_number or "",
             amount=req.amount
@@ -604,7 +670,7 @@ def get_policies():
 def convert_currency(req: ConvertRequest, token_data: dict = Depends(get_token_data)):
     region = token_data.get("region", 0)
     try:
-        _, wallet_stub = get_regional_stubs(region)
+        _, wallet_stub, _ = get_regional_stubs(region)
         bal_resp = wallet_stub.GetBalance(wallet_pb2.GetBalanceRequest(wallet_id=req.wallet_id))
         from_currency = bal_resp.wallet.currency
         if from_currency == req.to_currency:
@@ -633,7 +699,7 @@ def execute_ai_command(req: ExecuteNLRequest, token_data: dict = Depends(get_tok
     # In a sharded system, we can't hit the DB directly here.
     # We should use the wallet stub to find user wallets.
     try:
-        _, wallet_stub = get_regional_stubs(region)
+        _, wallet_stub, _ = get_regional_stubs(region)
         resp = wallet_stub.ListWallets(wallet_pb2.ListWalletsRequest(user_id=user_id))
         user_wallet = next((w for w in resp.wallets if w.currency == 1), None) # Prefer USD
         if not user_wallet and resp.wallets:
@@ -679,7 +745,7 @@ def admin_stats(token_data: dict = Depends(get_token_data)):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     try:
-        user_stub, _ = get_regional_stubs(region)
+        user_stub, _, _ = get_regional_stubs(region)
         resp = user_stub.GetStats(user_pb2.GetStatsRequest())
         return {
             "total_users": resp.total_users,
@@ -709,7 +775,7 @@ def admin_list_users(
         target_region = admin_region
     
     try:
-        user_stub, _ = get_regional_stubs(target_region)
+        user_stub, _, _ = get_regional_stubs(target_region)
         resp = user_stub.ListUsers(user_pb2.ListUsersRequest(limit=limit, offset=offset))
         
         users = []
@@ -853,12 +919,12 @@ def webauthn_register_begin(
     finally:
         session.close()
 
-@app.post("/api/auth/webauthn/register/begin")
-def webauthn_register_begin(token_data: dict = Depends(get_token_data)):
+@app.post("/api/auth/webauthn/register/begin/regional")
+def webauthn_register_begin_regional(token_data: dict = Depends(get_token_data)):
     user_id = token_data["user_id"]
     region = token_data.get("region", 0)
     try:
-        user_stub, _ = get_regional_stubs(region)
+        user_stub, _, _ = get_regional_stubs(region)
         resp = user_stub.WebAuthnRegisterBegin(user_pb2.WebAuthnRegisterBeginRequest(user_id=user_id))
         return json.loads(resp.options_json)
     except grpc.RpcError as e:
@@ -873,7 +939,7 @@ def webauthn_register_complete(
     user_id = token_data["user_id"]
     region = token_data.get("region", 0)
     try:
-        user_stub, _ = get_regional_stubs(region)
+        user_stub, _, _ = get_regional_stubs(region)
         resp = user_stub.WebAuthnRegisterComplete(user_pb2.WebAuthnRegisterCompleteRequest(
             user_id=user_id, credential_json=json.dumps(credential), label=label
         ))
@@ -890,7 +956,7 @@ def webauthn_register_complete(
 @app.post("/api/auth/webauthn/login/begin")
 def webauthn_login_begin(req: WebAuthnLoginBeginRequest):
     try:
-        user_stub, _ = get_regional_stubs(req.region)
+        user_stub, _, _ = get_regional_stubs(req.region)
         resp = user_stub.WebAuthnLoginBegin(user_pb2.WebAuthnLoginBeginRequest(email=req.email))
         return json.loads(resp.options_json)
     except grpc.RpcError as e:
@@ -899,7 +965,7 @@ def webauthn_login_begin(req: WebAuthnLoginBeginRequest):
 @app.post("/api/auth/webauthn/login/complete")
 def webauthn_login_complete(req: WebAuthnLoginCompleteRequest):
     try:
-        user_stub, _ = get_regional_stubs(req.region)
+        user_stub, _, _ = get_regional_stubs(req.region)
         resp = user_stub.WebAuthnLoginComplete(user_pb2.WebAuthnLoginCompleteRequest(
             assertion_json=json.dumps(req.assertion)
         ))

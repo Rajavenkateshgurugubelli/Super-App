@@ -2,12 +2,14 @@ import logging
 import uuid
 import json
 import grpc
+import hashlib
 from sqlalchemy import func
 from app import user_pb2, user_pb2_grpc
 from app.database import SessionLocal
 from app.models import User, Wallet, Transaction
 from app import models
 from app.security import get_password_hash, verify_password, create_access_token
+from app.security.kms import kms, encrypt_field, decrypt_field
 
 class UserService(user_pb2_grpc.UserServiceServicer):
     def __init__(self):
@@ -17,8 +19,11 @@ class UserService(user_pb2_grpc.UserServiceServicer):
         self._logger.info(f"Creating user for email: {request.email}")
         session = SessionLocal()
         try:
+            # Hash email for global lookup
+            email_hash = hashlib.sha256(request.email.lower().encode()).hexdigest()
+
             # Check if user exists
-            existing_user = session.query(User).filter(User.email == request.email).first()
+            existing_user = session.query(User).filter(User.email_hash == email_hash).first()
             if existing_user:
                 context.set_code(grpc.StatusCode.ALREADY_EXISTS)
                 context.set_details('User with this email already exists')
@@ -36,26 +41,38 @@ class UserService(user_pb2_grpc.UserServiceServicer):
                     "id": f"{did_string}#keys-1",
                     "type": "Ed25519VerificationKey2020",
                     "controller": did_string,
-                    # We would typically store the public key derived from user credentials here
                     "publicKeyMultibase": "placeholder"
                 }],
                 "authentication": [f"{did_string}#keys-1"]
             }
 
-            # Create User model
+            # Create User model (Global)
             new_user = User(
                 user_id=user_uuid, 
-                email=request.email,
-                name=request.name,
-                region=models.Region(request.region), # Cast int to Enum
-                password_hash=hashed_password,
-                kyc_status=models.KycStatus.PENDING, 
-                phone_number=request.phone_number,
+                email_hash=email_hash,
+                primary_region=models.Region(request.region),
+                account_status=models.AccountStatus.ACTIVE,
                 did=did_string,
                 did_document=json.dumps(did_doc)
             )
             
+            # Generate User DEK (Envelope Encryption)
+            dek, enc_dek = kms.generate_dek()
+
+            # Create UserPII (Regional) with encrypted fields
+            new_pii = models.UserPII(
+                user_id=user_uuid,
+                region=models.Region(request.region),
+                email=encrypt_field(dek, request.email),
+                name=encrypt_field(dek, request.name),
+                phone_number=encrypt_field(dek, request.phone_number),
+                encrypted_dek=enc_dek,
+                password_hash=hashed_password,
+                kyc_status=models.KycStatus.PENDING
+            )
+            
             session.add(new_user)
+            session.add(new_pii)
             session.commit()
             session.refresh(new_user)
             
@@ -73,15 +90,15 @@ class UserService(user_pb2_grpc.UserServiceServicer):
         self._logger.info(f"Login attempt for: {request.email}")
         session = SessionLocal()
         try:
-            user = session.query(User).filter(User.email == request.email).first()
-            if not user or not user.password_hash or not verify_password(request.password, user.password_hash):
-                # Return empty token/user on failure (gRPC doesn't have 401, typically use context.abort)
-                # For simplicity in this demo, return success=False logic or catch in gateway
+            email_hash = hashlib.sha256(request.email.lower().encode()).hexdigest()
+            user = session.query(User).filter(User.email_hash == email_hash).first()
+            if not user or not user.pii or not user.pii.password_hash or not verify_password(request.password, user.pii.password_hash):
+                # Return empty token/user on failure
                  context.set_code(grpc.StatusCode.UNAUTHENTICATED)
                  context.set_details('Invalid credentials')
                  return user_pb2.LoginResponse()
 
-            token = create_access_token({"sub": user.email, "user_id": user.user_id, "region": user.region.value})
+            token = create_access_token({"sub": user.pii.email, "user_id": user.user_id, "region": user.primary_region.value})
             
             return user_pb2.LoginResponse(
                 token=token,
@@ -110,8 +127,9 @@ class UserService(user_pb2_grpc.UserServiceServicer):
         session = SessionLocal()
         try:
             user = session.query(User).filter(User.user_id == request.user_id).first()
-            if user:
-                user.name = request.name
+            if user and user.pii:
+                user.pii.name = request.name
+                user.pii.last_modified_at = __import__("time").time()
                 session.commit()
                 session.refresh(user)
                 return user_pb2.UpdateProfileResponse(user=self._map_user_to_proto(user))
@@ -143,10 +161,10 @@ class UserService(user_pb2_grpc.UserServiceServicer):
         session = SessionLocal()
         try:
             user = session.query(User).filter(User.user_id == request.user_id).first()
-            if not user:
+            if not user or not user.pii:
                 context.set_code(grpc.StatusCode.NOT_FOUND)
                 return user_pb2.WebAuthnOptionsResponse()
-            options = begin_registration(user_id=user.user_id, user_name=user.email, user_display_name=user.name)
+            options = begin_registration(user_id=user.user_id, user_name=user.pii.email, user_display_name=user.pii.name)
             return user_pb2.WebAuthnOptionsResponse(options_json=json.dumps(options))
         finally:
             session.close()
@@ -171,7 +189,8 @@ class UserService(user_pb2_grpc.UserServiceServicer):
         from app.services.webauthn_service import begin_authentication
         session = SessionLocal()
         try:
-            user = session.query(User).filter(User.email == request.email).first()
+            email_hash = hashlib.sha256(request.email.lower().encode()).hexdigest()
+            user = session.query(User).filter(User.email_hash == email_hash).first()
             user_id = user.user_id if user else None
             options = begin_authentication(user_id=user_id)
             return user_pb2.WebAuthnOptionsResponse(options_json=json.dumps(options))
@@ -188,7 +207,7 @@ class UserService(user_pb2_grpc.UserServiceServicer):
                  context.set_code(grpc.StatusCode.NOT_FOUND)
                  return user_pb2.WebAuthnLoginCompleteResponse()
                  
-            token = create_access_token({"sub": user.email, "user_id": user.user_id, "region": user.region.value})
+            token = create_access_token({"sub": user.pii.email, "user_id": user.user_id, "region": user.primary_region.value})
             return user_pb2.WebAuthnLoginCompleteResponse(
                 token=token,
                 user=self._map_user_to_proto(user)
@@ -213,12 +232,31 @@ class UserService(user_pb2_grpc.UserServiceServicer):
             session.close()
 
     def _map_user_to_proto(self, user_model):
+        pii = user_model.pii
+        email = ""
+        name = ""
+        phone = ""
+        
+        if pii and pii.encrypted_dek:
+            try:
+                # Unwrap DEK
+                dek = kms.decrypt_dek(pii.encrypted_dek)
+                
+                # Decrypt Fields
+                email = decrypt_field(dek, pii.email)
+                name = decrypt_field(dek, pii.name)
+                phone = decrypt_field(dek, pii.phone_number)
+            except Exception as e:
+                self._logger.error(f"Failed to decrypt PII for user {user_model.user_id}: {e}")
+                email = "[ENCRYPTED]"
+                name = "[ENCRYPTED]"
+        
         return user_pb2.User(
             user_id=user_model.user_id,
-            email=user_model.email,
-            name=user_model.name,
-            region=user_model.region.value,
-            kyc_status=user_model.kyc_status.value,
-            phone_number=user_model.phone_number or "",
+            email=email,
+            name=name,
+            region=user_model.primary_region.value,
+            kyc_status=pii.kyc_status.value if pii else models.KycStatus.PENDING.value,
+            phone_number=phone,
             is_admin=bool(user_model.is_admin)
         )

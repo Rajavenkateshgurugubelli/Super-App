@@ -9,6 +9,20 @@ service WalletService {
   rpc GetTransactionHistory (GetTransactionHistoryRequest) returns (GetTransactionHistoryResponse);
   rpc GetConversionHistory (GetConversionHistoryRequest) returns (GetConversionHistoryResponse);
   rpc ListWallets (ListWalletsRequest) returns (ListWalletsResponse);
+  rpc RefundFunds (RefundFundsRequest) returns (RefundFundsResponse);
+}
+
+message RefundFundsRequest {
+  string original_transaction_id = 1;
+  string wallet_id = 2;
+  double amount = 3;
+  string reason = 4;
+}
+
+message RefundFundsResponse {
+  bool success = 1;
+  string compensation_id = 2;
+  string message = 3;
 }
 
 message Wallet {
